@@ -36,6 +36,7 @@ public class BlockingQueueEventRepo<T> implements EventRepo<T> {
     /**
      * 发送事件（添加到队列）
      */
+    @Override
     public boolean send(Event<T> event) {
         return eventQueue.offer(event);
     }

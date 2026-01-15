@@ -11,5 +11,5 @@ public interface EventRepo<T> {
      */
     Event<T> receive();
 
-    void send(Event<T> event );
+    boolean send(Event<T> event );
 }

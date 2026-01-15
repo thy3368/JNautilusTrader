@@ -15,7 +15,27 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Avellaneda-Stoikov 做市策略实现类
- * 基于币安 WebSocket 实现
+ *
+ * 该策略基于 Avellaneda-Stoikov 模型，是一种量化做市策略，通过优化买卖价差来最大化利润。
+ *
+ * 核心公式：
+ * - 预留价格 (Reservation Price): r = s - q * γ * σ^2 * (T - t)
+ * - 最优价差: δ = γ * σ^2 * (T - t) + (2/γ) * ln(1 + γ/k)
+ * - 最优买价: bid = r - δ/2
+ * - 最优卖价: ask = r + δ/2
+ *
+ * 其中：
+ * - s: 当前市场中间价
+ * - q: 当前库存
+ * - γ: 风险厌恶系数
+ * - σ: 波动率
+ * - T - t: 剩余交易时间
+ * - k: 订单到达率
+ *
+ * 基于币安 WebSocket 实现实时市场数据接收和订单执行
+ *
+ * @author JNautilusTrader
+ * @version 1.0
  */
 
 @Component
@@ -33,6 +53,10 @@ public class AvellanedaStoikovStrategy  implements Strategy {
 
     // 时间戳
     private long startTime;
+
+    // 线程引用，用于资源清理
+    private Thread eventThread;
+    private Thread strategyThread;
 
     public AvellanedaStoikovStrategy(EventRepo<MarketData> marketDataRepo,
                                      EventRepo<TradeCmd> tradeCmdRepo,
@@ -81,7 +105,7 @@ public class AvellanedaStoikovStrategy  implements Strategy {
         System.out.println("策略参数: " + params);
 
         // 启动事件处理线程
-        Thread eventThread = new Thread(() -> {
+        eventThread = new Thread(() -> {
             while (state.isRunning) {
                 try {
                     Event<MarketData> event = marketDataRepo.receive();
@@ -107,7 +131,7 @@ public class AvellanedaStoikovStrategy  implements Strategy {
         eventThread.start();
 
         // 启动策略执行线程
-        Thread strategyThread = new Thread(() -> {
+        strategyThread = new Thread(() -> {
             while (state.isRunning && state.currentTime < params.runTime) {
                 try {
                     // 更新当前时间
@@ -139,7 +163,37 @@ public class AvellanedaStoikovStrategy  implements Strategy {
      */
     @Override
     public void stop() {
+        System.out.println("正在停止策略...");
         state.isRunning = false;
+
+        // 中断并等待线程结束
+        if (eventThread != null && eventThread.isAlive()) {
+            eventThread.interrupt();
+            try {
+                eventThread.join(5000); // 最多等待5秒
+            } catch (InterruptedException e) {
+                System.out.println("等待事件处理线程结束时被中断");
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        if (strategyThread != null && strategyThread.isAlive()) {
+            strategyThread.interrupt();
+            try {
+                strategyThread.join(5000); // 最多等待5秒
+            } catch (InterruptedException e) {
+                System.out.println("等待策略执行线程结束时被中断");
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        // 打印最终统计信息
+        System.out.println("=== 策略执行结果 ===");
+        System.out.println("运行时间: " + state.currentTime + " 秒");
+        System.out.println("总交易次数: " + state.tradeCount);
+        System.out.println("最终库存: " + state.inventory);
+        System.out.println("总利润: " + state.totalProfit);
+        System.out.println("最后中间价: " + state.midPrice);
         System.out.println("策略已停止");
     }
 
@@ -193,15 +247,34 @@ public class AvellanedaStoikovStrategy  implements Strategy {
 
     /**
      * 计算最优买卖价格
+     * 基于 Avellaneda-Stoikov 做市模型
      */
     private double[] calculateOptimalPrices() {
-        // 计算库存风险调整项
-        double inventoryAdjustment = params.gamma * params.volatility * params.volatility *
-                (params.runTime - state.currentTime) * state.inventory;
+        // 计算剩余时间
+        double timeRemaining = params.runTime - state.currentTime;
+        if (timeRemaining <= 0) {
+            timeRemaining = 1.0; // 防止除以零
+        }
+
+        // 计算预留价格 (reservation price)
+        // r = s - q * γ * σ^2 * (T - t)
+        double reservationPrice = state.midPrice - state.inventory * params.gamma *
+                params.volatility * params.volatility * timeRemaining;
+
+        // 计算最优价差 (optimal spread)
+        // δ = γ * σ^2 * (T - t) + (2/γ) * ln(1 + γ/k)
+        // 简化版本：使用固定价差加上库存调整
+        double spreadAdjustment = params.gamma * params.volatility * params.volatility * timeRemaining;
 
         // 计算最优买价和卖价
-        double optimalBid = state.midPrice - inventoryAdjustment - params.gridSpacing;
-        double optimalAsk = state.midPrice + inventoryAdjustment + params.gridSpacing;
+        // bid = r - δ/2 - gridSpacing
+        // ask = r + δ/2 + gridSpacing
+        double optimalBid = reservationPrice - spreadAdjustment / 2 - params.gridSpacing;
+        double optimalAsk = reservationPrice + spreadAdjustment / 2 + params.gridSpacing;
+
+        // 确保价格合理（不为负值且买价低于卖价）
+        optimalBid = Math.max(optimalBid, state.midPrice * 0.95); // 最多偏离中间价5%
+        optimalAsk = Math.max(optimalAsk, optimalBid + params.gridSpacing * 2);
 
         return new double[]{optimalBid, optimalAsk};
     }
@@ -223,8 +296,12 @@ public class AvellanedaStoikovStrategy  implements Strategy {
         event.type = "PLACE_ORDER";
         event.payload = tradeCmd;
 
-        tradeCmdRepo.send(event);
-        System.out.println("发送买入订单: 价格=" + price + ", 数量=" + params.orderQuantity);
+        boolean sent = tradeCmdRepo.send(event);
+        if (sent) {
+            System.out.println("发送买入订单成功: 价格=" + price + ", 数量=" + params.orderQuantity);
+        } else {
+            System.out.println("发送买入订单失败: 价格=" + price + ", 数量=" + params.orderQuantity);
+        }
     }
 
     /**
@@ -244,8 +321,12 @@ public class AvellanedaStoikovStrategy  implements Strategy {
         event.type = "PLACE_ORDER";
         event.payload = tradeCmd;
 
-        tradeCmdRepo.send(event);
-        System.out.println("发送卖出订单: 价格=" + price + ", 数量=" + params.orderQuantity);
+        boolean sent = tradeCmdRepo.send(event);
+        if (sent) {
+            System.out.println("发送卖出订单成功: 价格=" + price + ", 数量=" + params.orderQuantity);
+        } else {
+            System.out.println("发送卖出订单失败: 价格=" + price + ", 数量=" + params.orderQuantity);
+        }
     }
 
     /**

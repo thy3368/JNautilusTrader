@@ -69,4 +69,12 @@ public enum MarketData {
         marketData.setMessage(data);
         return marketData;
     }
+
+    @Override
+    public String toString() {
+        if (message != null) {
+            return message.toString();
+        }
+        return name();
+    }
 }

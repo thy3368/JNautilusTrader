@@ -1,11 +1,12 @@
 package com.tanggo.fund.jnautilustrader.adapter.mdgw.bn;
 
-import com.tanggo.fund.jnautilustrader.adapter.BlockingQueueEventRepo;
-import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
-import com.tanggo.fund.jnautilustrader.core.entity.Event;
-import com.tanggo.fund.jnautilustrader.core.entity.data.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.tanggo.fund.jnautilustrader.adapter.BlockingQueueEventRepo;
+import com.tanggo.fund.jnautilustrader.core.entity.Actor;
+import com.tanggo.fund.jnautilustrader.core.entity.Event;
+import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
+import com.tanggo.fund.jnautilustrader.core.entity.data.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -14,32 +15,29 @@ import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 币安WebSocket客户端 - 订阅实时交易数据
  */
 @Component
-public class BNMDGWWebSocketClient {
+public class BNMDGWWebSocketClient implements Actor {
 
     private static final Logger logger = LoggerFactory.getLogger(BNMDGWWebSocketClient.class);
-
-    private final BlockingQueueEventRepo<MarketData> mdEventRepo;
-    private final ObjectMapper objectMapper;
-
-    private WebSocket webSocket;
-    private final ScheduledExecutorService reconnectScheduler;
-    private volatile boolean reconnecting;
-
-    // 币安WebSocket API地址
-    private static final String BINANCE_WS_URL = "wss://stream.binance.com:9443/ws/btcusdt@trade";
+    // 币安WebSocket API地址 - 同时订阅交易、订单簿深度和增量更新
+    private static final String BINANCE_WS_URL = "wss://stream.binance.com:9443/stream?streams=btcusdt@trade/btcusdt@depth/btcusdt@depthUpdate";
     // 重连间隔（秒）
     private static final int RECONNECT_DELAY = 5;
+    private final BlockingQueueEventRepo<MarketData> mdEventRepo;
+    private final ObjectMapper objectMapper;
+    private final ScheduledExecutorService reconnectScheduler;
+    private WebSocket webSocket;
+    private volatile boolean reconnecting;
 
     public BNMDGWWebSocketClient(BlockingQueueEventRepo<MarketData> mdEventRepo) {
         this.mdEventRepo = mdEventRepo;
@@ -48,18 +46,11 @@ public class BNMDGWWebSocketClient {
         this.reconnecting = false;
     }
 
-    /**
-     * 初始化时建立连接
-     */
-    @PostConstruct
-    public void init() {
-        connect();
-    }
 
     /**
      * 建立WebSocket连接
      */
-    public void connect() {
+    private void connect() {
         if (webSocket != null) {
             logger.warn("WebSocket connection already established");
             return;
@@ -67,10 +58,8 @@ public class BNMDGWWebSocketClient {
 
         try {
             URI uri = new URI(BINANCE_WS_URL);
-            HttpClient client = HttpClient.newHttpClient();
-            webSocket = client.newWebSocketBuilder()
-                    .buildAsync(uri, new WebSocketListener())
-                    .join();
+            HttpClient client = HttpClient.newBuilder().connectTimeout(java.time.Duration.ofSeconds(10)).build();
+            webSocket = client.newWebSocketBuilder().connectTimeout(java.time.Duration.ofSeconds(10)).buildAsync(uri, new WebSocketListener()).join();
 
             logger.info("Connected to Binance WebSocket: {}", BINANCE_WS_URL);
         } catch (URISyntaxException e) {
@@ -84,8 +73,8 @@ public class BNMDGWWebSocketClient {
     /**
      * 关闭WebSocket连接
      */
-    @PreDestroy
-    public void destroy() {
+
+    private void destroy() {
         reconnectScheduler.shutdown();
         if (webSocket != null) {
             try {
@@ -114,87 +103,88 @@ public class BNMDGWWebSocketClient {
         }, RECONNECT_DELAY, TimeUnit.SECONDS);
     }
 
-    /**
-     * WebSocket监听器
-     */
-    private class WebSocketListener implements WebSocket.Listener {
+    @Override
+    @PostConstruct
+    public void start() {
+        connect();
 
-        @Override
-        public void onOpen(WebSocket webSocket) {
-            logger.info("Binance WebSocket connection opened");
-            WebSocket.Listener.super.onOpen(webSocket);
-        }
+    }
 
-        @Override
-        public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
-            String message = data.toString();
-            logger.debug("Received Binance WebSocket message: {}", message);
-            try {
-                // 解析币安WebSocket消息
-                Object parsedMessage = parseMessage(message);
-                if (parsedMessage != null) {
-                    // 创建MarketData实例并发送到仓储
-                    MarketData marketData = MarketData.createWithData(parsedMessage);
-                    Event<MarketData> event = new Event<>();
-                    event.type = determineEventType(parsedMessage);
-                    event.payload = marketData;
-                    mdEventRepo.send(event);
-                    logger.debug("Sent market data event: {}", event.type);
-                }
-            } catch (Exception e) {
-                logger.error("Failed to process Binance WebSocket message: {}", e.getMessage(), e);
-            }
-            return WebSocket.Listener.super.onText(webSocket, data, last);
-        }
+    @Override
+    @PreDestroy
+    public void stop() {
+        destroy();
 
-        @Override
-        public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-            logger.info("Binance WebSocket connection closed: status={}, reason={}", statusCode, reason);
-            BNMDGWWebSocketClient.this.webSocket = null;
-            // 自动重连
-            scheduleReconnect();
-            return WebSocket.Listener.super.onClose(webSocket, statusCode, reason);
-        }
-
-        @Override
-        public void onError(WebSocket webSocket, Throwable error) {
-            logger.error("Binance WebSocket error: {}", error.getMessage(), error);
-        }
     }
 
     /**
      * 解析币安WebSocket返回的各种类型的消息
      */
     private Object parseMessage(String message) throws Exception {
-        // 首先解析出事件类型
+        // 首先解析根节点
         JsonNode rootNode = objectMapper.readTree(message);
-        String eventType = rootNode.path("e").asText();
 
-        switch (eventType) {
-            case "trade":
-                return parseTradeTick(message);
-            case "aggTrade":
-                return parseAggregateTradeTick(message);
-            case "depth":
-                return parseOrderBookDepth(message);
-            case "depthUpdate":
-                return parseOrderBookDelta(message);
-            case "kline":
-                return parseBar(message);
-            case "miniTicker":
-            case "ticker":
-                return parseQuoteTick(message);
-            case "markPriceUpdate":
-                return parseMarkPriceUpdate(message);
-            case "indexPriceUpdate":
-                return parseIndexPriceUpdate(message);
-            case "fundingRate":
-                return parseFundingRateUpdate(message);
-            case "bookTicker":
-                return parseBookTicker(message);
-            default:
-                logger.debug("Received unsupported event type: {}", eventType);
-                return null;
+        // 检查是否是组合流格式（包含stream和data字段）
+        if (rootNode.has("stream") && rootNode.has("data")) {
+            JsonNode dataNode = rootNode.path("data");
+            String eventType = dataNode.path("e").asText();
+
+            switch (eventType) {
+                case "trade":
+                    return parseTradeTick(dataNode.toString());
+                case "aggTrade":
+                    return parseAggregateTradeTick(dataNode.toString());
+                case "depth":
+                    return parseOrderBookDepth(dataNode.toString());
+                case "depthUpdate":
+                    return parseOrderBookDelta(dataNode.toString());
+                case "kline":
+                    return parseBar(dataNode.toString());
+                case "miniTicker":
+                case "ticker":
+                    return parseQuoteTick(dataNode.toString());
+                case "markPriceUpdate":
+                    return parseMarkPriceUpdate(dataNode.toString());
+                case "indexPriceUpdate":
+                    return parseIndexPriceUpdate(dataNode.toString());
+                case "fundingRate":
+                    return parseFundingRateUpdate(dataNode.toString());
+                case "bookTicker":
+                    return parseBookTicker(dataNode.toString());
+                default:
+                    logger.debug("Received unsupported event type: {}", eventType);
+                    return null;
+            }
+        } else {
+            // 单流格式
+            String eventType = rootNode.path("e").asText();
+
+            switch (eventType) {
+                case "trade":
+                    return parseTradeTick(message);
+                case "aggTrade":
+                    return parseAggregateTradeTick(message);
+                case "depth":
+                    return parseOrderBookDepth(message);
+                case "depthUpdate":
+                    return parseOrderBookDelta(message);
+                case "kline":
+                    return parseBar(message);
+                case "miniTicker":
+                case "ticker":
+                    return parseQuoteTick(message);
+                case "markPriceUpdate":
+                    return parseMarkPriceUpdate(message);
+                case "indexPriceUpdate":
+                    return parseIndexPriceUpdate(message);
+                case "fundingRate":
+                    return parseFundingRateUpdate(message);
+                case "bookTicker":
+                    return parseBookTicker(message);
+                default:
+                    logger.debug("Received unsupported event type: {}", eventType);
+                    return null;
+            }
         }
     }
 
@@ -297,5 +287,71 @@ public class BNMDGWWebSocketClient {
      */
     public boolean isConnected() {
         return webSocket != null;
+    }
+
+    /**
+     * WebSocket监听器
+     */
+    private class WebSocketListener implements WebSocket.Listener {
+        // 用于累积分片消息
+        private final StringBuilder messageBuffer = new StringBuilder();
+
+        @Override
+        public void onOpen(WebSocket webSocket) {
+            logger.info("Binance WebSocket connection opened");
+            WebSocket.Listener.super.onOpen(webSocket);
+        }
+
+        @Override
+        public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+            String message = data.toString();
+            logger.debug("Received Binance WebSocket message fragment: {}", message);
+
+            try {
+                // 累积消息片段
+                messageBuffer.append(message);
+
+                // 如果是完整消息，处理它
+                if (last) {
+                    String completeMessage = messageBuffer.toString();
+                    logger.debug("Received complete Binance WebSocket message: {}", completeMessage);
+
+                    // 解析币安WebSocket消息
+                    Object parsedMessage = parseMessage(completeMessage);
+                    if (parsedMessage != null) {
+                        // 创建MarketData实例并发送到仓储
+                        MarketData marketData = MarketData.createWithData(parsedMessage);
+                        Event<MarketData> event = new Event<>();
+                        event.type = determineEventType(parsedMessage);
+                        event.payload = marketData;
+                        mdEventRepo.send(event);
+                        logger.debug("Sent market data event: {}", event.type);
+                    }
+
+                    // 清空缓冲区
+                    messageBuffer.setLength(0);
+                }
+            } catch (Exception e) {
+                logger.error("Failed to process Binance WebSocket message: {}", e.getMessage(), e);
+                // 清空缓冲区以防止后续消息解析错误
+                messageBuffer.setLength(0);
+            }
+
+            return WebSocket.Listener.super.onText(webSocket, data, last);
+        }
+
+        @Override
+        public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
+            logger.info("Binance WebSocket connection closed: status={}, reason={}", statusCode, reason);
+            BNMDGWWebSocketClient.this.webSocket = null;
+            // 自动重连
+            scheduleReconnect();
+            return WebSocket.Listener.super.onClose(webSocket, statusCode, reason);
+        }
+
+        @Override
+        public void onError(WebSocket webSocket, Throwable error) {
+            logger.error("Binance WebSocket error: {}", error.getMessage(), error);
+        }
     }
 }

@@ -1,6 +1,7 @@
 package com.tanggo.fund.jnautilustrader.core.entity.data;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;
 
 import java.time.Instant;
@@ -9,6 +10,7 @@ import java.time.Instant;
  * 交易Tick数据
  */
 @Data
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class TradeTick {
     /**
      * 交易ID
