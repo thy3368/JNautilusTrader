@@ -9,26 +9,27 @@ import com.tanggo.fund.jnautilustrader.core.entity.TradeCmd;
 import com.tanggo.fund.jnautilustrader.core.entity.data.TradeTick;
 import com.tanggo.fund.jnautilustrader.core.entity.data.PlaceOrder;
 import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDelta;
-import com.tanggo.fund.jnautilustrader.adapter.BlockingQueueEventRepo;
+import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
-import java.time.Instant;
 
 /**
  * Avellaneda-Stoikov 做市策略实现类
  * 基于币安 WebSocket 实现
  */
-public class AvellanedaStoikovStrategy {
+
+@Component
+public class AvellanedaStoikovStrategy  implements Strategy {
 
     // 策略参数
-    private final AvellanedaStoikovParams params;
+    private  AvellanedaStoikovParams params;
     // 策略状态
-    private final AvellanedaStoikovState state;
+    private  AvellanedaStoikovState state;
 
     // 事件仓库
-    private final EventRepo<MarketData> marketDataRepo;
-    private final EventRepo<TradeCmd> tradeCmdRepo;
-    private final EventHandlerRepo<MarketData> eventHandlerRepo;
+    private  EventRepo<MarketData> marketDataRepo;
+    private  EventRepo<TradeCmd> tradeCmdRepo;
+    private  EventHandlerRepo<MarketData> eventHandlerRepo;
 
     // 时间戳
     private long startTime;
@@ -67,6 +68,7 @@ public class AvellanedaStoikovStrategy {
     /**
      * 启动策略
      */
+    @Override
     public void start() {
         state.isRunning = true;
         startTime = System.currentTimeMillis();
@@ -133,6 +135,7 @@ public class AvellanedaStoikovStrategy {
     /**
      * 停止策略
      */
+    @Override
     public void stop() {
         state.isRunning = false;
         System.out.println("策略已停止");

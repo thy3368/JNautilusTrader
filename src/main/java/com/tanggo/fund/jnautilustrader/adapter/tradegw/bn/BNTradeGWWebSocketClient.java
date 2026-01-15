@@ -37,7 +37,6 @@ public class BNTradeGWWebSocketClient {
 
 
     private final BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo;
-    private final BlockingQueueEventRepo<TradeTick> tradeEventRepo;
     private final ObjectMapper objectMapper;
     private final ScheduledExecutorService reconnectExecutor = Executors.newSingleThreadScheduledExecutor();
     private final HttpClient httpClient;
@@ -47,10 +46,9 @@ public class BNTradeGWWebSocketClient {
     private WebSocket webSocket;
     private volatile boolean connected = false;
 
-    public BNTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo, BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo, BlockingQueueEventRepo<TradeTick> tradeEventRepo, ObjectMapper objectMapper) {
+    public BNTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo, BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo, ObjectMapper objectMapper) {
         this.marketDataBlockingQueueEventRepo = marketDataBlockingQueueEventRepo;
         this.tradeCmdEventRepo = tradeCmdEventRepo;
-        this.tradeEventRepo = tradeEventRepo;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newHttpClient();
     }
@@ -287,7 +285,6 @@ public class BNTradeGWWebSocketClient {
                 marketEvent.setType("executionReport");
                 marketEvent.setPayload(MarketData.createWithData(tradeTick));
                 marketDataBlockingQueueEventRepo.send(marketEvent);
-                tradeEventRepo.send(event);
             }
         } catch (Exception e) {
             logger.error("解析执行报告失败: {}", e.getMessage(), e);
