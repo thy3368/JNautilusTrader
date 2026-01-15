@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tanggo.fund.jnautilustrader.adapter.BlockingQueueEventRepo;
+import com.tanggo.fund.jnautilustrader.core.entity.Actor;
 import com.tanggo.fund.jnautilustrader.core.entity.Event;
 import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
 import com.tanggo.fund.jnautilustrader.core.entity.TradeCmd;
@@ -29,7 +30,7 @@ import java.util.concurrent.TimeUnit;
  * 负责连接币安交易WebSocket API，发送交易命令并处理响应
  */
 @Component
-public class BNTradeGWWebSocketClient {
+public class BNTradeGWWebSocketClient implements Actor {
 
     private static final Logger logger = LoggerFactory.getLogger(BNTradeGWWebSocketClient.class);
 
@@ -317,6 +318,18 @@ public class BNTradeGWWebSocketClient {
      */
     private void handleBalanceUpdate(JsonNode balance) {
         logger.debug("收到余额更新: {}", balance);
+    }
+
+    @Override
+    public void start() {
+        connect();
+    }
+
+    @Override
+    public void stop() {
+
+
+        destroy();
     }
 
     /**
