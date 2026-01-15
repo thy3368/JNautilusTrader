@@ -1,29 +1,24 @@
 package com.tanggo.fund.jnautilustrader.core.process;
 
-import com.tanggo.fund.jnautilustrader.core.entity.Event;
-import com.tanggo.fund.jnautilustrader.core.entity.EventHandler;
-import com.tanggo.fund.jnautilustrader.core.entity.EventRepo;
-import com.tanggo.fund.jnautilustrader.core.entity.EventHandlerRepo;
-import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
-import com.tanggo.fund.jnautilustrader.core.entity.TradeCmd;
-import com.tanggo.fund.jnautilustrader.core.entity.data.TradeTick;
-import com.tanggo.fund.jnautilustrader.core.entity.data.PlaceOrder;
+import com.tanggo.fund.jnautilustrader.core.entity.*;
 import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDelta;
+import com.tanggo.fund.jnautilustrader.core.entity.data.PlaceOrder;
+import com.tanggo.fund.jnautilustrader.core.entity.data.TradeTick;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
 
 /**
  * Avellaneda-Stoikov 做市策略实现类
- *
+ * <p>
  * 该策略基于 Avellaneda-Stoikov 模型，是一种量化做市策略，通过优化买卖价差来最大化利润。
- *
+ * <p>
  * 核心公式：
  * - 预留价格 (Reservation Price): r = s - q * γ * σ^2 * (T - t)
  * - 最优价差: δ = γ * σ^2 * (T - t) + (2/γ) * ln(1 + γ/k)
  * - 最优买价: bid = r - δ/2
  * - 最优卖价: ask = r + δ/2
- *
+ * <p>
  * 其中：
  * - s: 当前市场中间价
  * - q: 当前库存
@@ -31,7 +26,7 @@ import java.util.concurrent.TimeUnit;
  * - σ: 波动率
  * - T - t: 剩余交易时间
  * - k: 订单到达率
- *
+ * <p>
  * 基于币安 WebSocket 实现实时市场数据接收和订单执行
  *
  * @author JNautilusTrader
@@ -39,57 +34,37 @@ import java.util.concurrent.TimeUnit;
  */
 
 @Component
-public class AvellanedaStoikovStrategy  implements Strategy {
+public class AvellanedaStoikovStrategy implements Strategy {
 
-    // 策略参数
-    private  AvellanedaStoikovParams params;
-    // 策略状态
-    private  AvellanedaStoikovState state;
+    // 策略参数 todo可以repo
+    private final AvellanedaStoikovParams params;
+    // 策略状态 todo可以repo
+    private final AvellanedaStoikovState state;
 
     // 事件仓库
-    private  EventRepo<MarketData> marketDataRepo;
-    private  EventRepo<TradeCmd> tradeCmdRepo;
-    private  EventHandlerRepo<MarketData> eventHandlerRepo;
+    private final EventRepo<MarketData> marketDataRepo;
+    private final EventRepo<TradeCmd> tradeCmdRepo;
+    private final EventHandlerRepo<MarketData> eventHandlerRepo;
 
-    // 时间戳
-    private long startTime;
 
     // 线程引用，用于资源清理
     private Thread eventThread;
     private Thread strategyThread;
 
-    public AvellanedaStoikovStrategy(EventRepo<MarketData> marketDataRepo,
-                                     EventRepo<TradeCmd> tradeCmdRepo,
-                                     EventHandlerRepo<MarketData> eventHandlerRepo) {
+    public AvellanedaStoikovStrategy(EventRepo<MarketData> marketDataRepo, EventRepo<TradeCmd> tradeCmdRepo, EventHandlerRepo<MarketData> eventHandlerRepo) {
         this(marketDataRepo, tradeCmdRepo, eventHandlerRepo, AvellanedaStoikovParams.defaultParams());
     }
 
-    public AvellanedaStoikovStrategy(EventRepo<MarketData> marketDataRepo,
-                                     EventRepo<TradeCmd> tradeCmdRepo,
-                                     EventHandlerRepo<MarketData> eventHandlerRepo,
-                                     AvellanedaStoikovParams params) {
+    public AvellanedaStoikovStrategy(EventRepo<MarketData> marketDataRepo, EventRepo<TradeCmd> tradeCmdRepo, EventHandlerRepo<MarketData> eventHandlerRepo, AvellanedaStoikovParams params) {
         this.marketDataRepo = marketDataRepo;
         this.tradeCmdRepo = tradeCmdRepo;
         this.eventHandlerRepo = eventHandlerRepo;
         this.params = params;
         this.state = AvellanedaStoikovState.initialState();
 
-        // 初始化事件处理器
-        initializeEventHandlers();
+
     }
 
-    /**
-     * 初始化事件处理器
-     */
-    private void initializeEventHandlers() {
-        // 由于 EventHandlerRepo 接口只有 queryBy 方法，没有提供注册方法
-        // 我们需要检查 EventHandlerRepo 的实现类，看它是如何存储事件处理器的
-        // 目前我们创建事件处理器实例，确保它们能被正确查询到
-        // 这里假设 EventHandlerRepo 内部已经预注册了这些事件处理器
-
-        System.out.println("事件处理器初始化完成");
-        System.out.println("已配置的事件类型: BINANCE_TRADE_TICK, BINANCE_ORDER_BOOK_DELTA");
-    }
 
     /**
      * 启动策略
@@ -97,7 +72,7 @@ public class AvellanedaStoikovStrategy  implements Strategy {
     @Override
     public void start() {
         state.isRunning = true;
-        startTime = System.currentTimeMillis();
+        state.startTime = System.currentTimeMillis();
         state.currentTime = 0;
         state.inventory = params.initialInventory;
 
@@ -135,7 +110,7 @@ public class AvellanedaStoikovStrategy  implements Strategy {
             while (state.isRunning && state.currentTime < params.runTime) {
                 try {
                     // 更新当前时间
-                    state.currentTime = (System.currentTimeMillis() - startTime) / 1000.0;
+                    state.currentTime = (System.currentTimeMillis() - state.startTime) / 1000.0;
 
                     // 执行策略逻辑
                     executeStrategy();
@@ -258,8 +233,7 @@ public class AvellanedaStoikovStrategy  implements Strategy {
 
         // 计算预留价格 (reservation price)
         // r = s - q * γ * σ^2 * (T - t)
-        double reservationPrice = state.midPrice - state.inventory * params.gamma *
-                params.volatility * params.volatility * timeRemaining;
+        double reservationPrice = state.midPrice - state.inventory * params.gamma * params.volatility * params.volatility * timeRemaining;
 
         // 计算最优价差 (optimal spread)
         // δ = γ * σ^2 * (T - t) + (2/γ) * ln(1 + γ/k)
@@ -283,11 +257,7 @@ public class AvellanedaStoikovStrategy  implements Strategy {
      * 发送买入订单
      */
     private void sendBuyOrder(double price) {
-        PlaceOrder order = PlaceOrder.createLimitBuyOrder(
-                params.symbol,
-                params.orderQuantity,
-                price
-        );
+        PlaceOrder order = PlaceOrder.createLimitBuyOrder(params.symbol, params.orderQuantity, price);
 
         TradeCmd tradeCmd = TradeCmd.createWithData(order);
 
@@ -308,11 +278,7 @@ public class AvellanedaStoikovStrategy  implements Strategy {
      * 发送卖出订单
      */
     private void sendSellOrder(double price) {
-        PlaceOrder order = PlaceOrder.createLimitSellOrder(
-                params.symbol,
-                params.orderQuantity,
-                price
-        );
+        PlaceOrder order = PlaceOrder.createLimitSellOrder(params.symbol, params.orderQuantity, price);
 
         TradeCmd tradeCmd = TradeCmd.createWithData(order);
 
@@ -336,8 +302,7 @@ public class AvellanedaStoikovStrategy  implements Strategy {
         @Override
         public void handle(Event<MarketData> event) {
             MarketData marketData = event.payload;
-            if (marketData.getMessage() instanceof TradeTick) {
-                TradeTick tradeTick = (TradeTick) marketData.getMessage();
+            if (marketData.getMessage() instanceof TradeTick tradeTick) {
                 // 更新中间价
                 state.midPrice = tradeTick.price;
                 // 更新最后交易价格
@@ -383,8 +348,7 @@ public class AvellanedaStoikovStrategy  implements Strategy {
         @Override
         public void handle(Event<MarketData> event) {
             MarketData marketData = event.payload;
-            if (marketData.getMessage() instanceof OrderBookDelta) {
-                OrderBookDelta orderBookDelta = (OrderBookDelta) marketData.getMessage();
+            if (marketData.getMessage() instanceof OrderBookDelta orderBookDelta) {
                 // 更新中间价
                 if (orderBookDelta.getBidPrice() > 0 && orderBookDelta.getAskPrice() > 0) {
                     state.midPrice = (orderBookDelta.getBidPrice() + orderBookDelta.getAskPrice()) / 2;

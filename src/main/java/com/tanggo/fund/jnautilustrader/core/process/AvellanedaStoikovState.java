@@ -25,6 +25,8 @@ public class AvellanedaStoikovState {
     public double bestAsk;
     // 是否在运行
     public boolean isRunning;
+    // 时间戳
+    public long startTime;
 
     public AvellanedaStoikovState() {
         this.currentTime = 0;
