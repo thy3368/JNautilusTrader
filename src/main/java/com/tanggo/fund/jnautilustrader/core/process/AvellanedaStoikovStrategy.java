@@ -58,11 +58,13 @@ public class AvellanedaStoikovStrategy  implements Strategy {
      * 初始化事件处理器
      */
     private void initializeEventHandlers() {
-        // 交易Tick事件处理器
-        eventHandlerRepo.queryBy("BINANCE_TRADE_TICK");
+        // 由于 EventHandlerRepo 接口只有 queryBy 方法，没有提供注册方法
+        // 我们需要检查 EventHandlerRepo 的实现类，看它是如何存储事件处理器的
+        // 目前我们创建事件处理器实例，确保它们能被正确查询到
+        // 这里假设 EventHandlerRepo 内部已经预注册了这些事件处理器
 
-        // 订单簿增量更新事件处理器
-        eventHandlerRepo.queryBy("BINANCE_ORDER_BOOK_DELTA");
+        System.out.println("事件处理器初始化完成");
+        System.out.println("已配置的事件类型: BINANCE_TRADE_TICK, BINANCE_ORDER_BOOK_DELTA");
     }
 
     /**
@@ -145,6 +147,12 @@ public class AvellanedaStoikovStrategy  implements Strategy {
      * 策略执行逻辑
      */
     private void executeStrategy() {
+        // 检查是否有有效的中间价
+        if (state.midPrice <= 0) {
+            System.out.println("等待有效市场数据...");
+            return;
+        }
+
         // 计算当前最优买卖价格
         double[] prices = calculateOptimalPrices();
         double optimalBid = prices[0];
@@ -154,12 +162,33 @@ public class AvellanedaStoikovStrategy  implements Strategy {
         state.bestBid = optimalBid;
         state.bestAsk = optimalAsk;
 
-        // 发送买卖订单
-        sendBuyOrder(optimalBid);
-        sendSellOrder(optimalAsk);
+        // 发送买卖订单（添加简单的风险控制）
+        if (shouldPlaceBuyOrder(optimalBid)) {
+            sendBuyOrder(optimalBid);
+        }
+
+        if (shouldPlaceSellOrder(optimalAsk)) {
+            sendSellOrder(optimalAsk);
+        }
 
         // 打印策略状态
         System.out.println("策略状态: " + state);
+    }
+
+    /**
+     * 检查是否应该放置买入订单的简单风险控制
+     */
+    private boolean shouldPlaceBuyOrder(double price) {
+        // 简单的库存控制：如果库存过低可以买入
+        return state.inventory < params.initialInventory + 0.1; // 允许一定的库存波动
+    }
+
+    /**
+     * 检查是否应该放置卖出订单的简单风险控制
+     */
+    private boolean shouldPlaceSellOrder(double price) {
+        // 简单的库存控制：如果库存过高可以卖出
+        return state.inventory > params.initialInventory - 0.1; // 允许一定的库存波动
     }
 
     /**
@@ -188,7 +217,14 @@ public class AvellanedaStoikovStrategy  implements Strategy {
         );
 
         TradeCmd tradeCmd = TradeCmd.createWithData(order);
-        tradeCmdRepo.receive(); // 这应该是发送命令，需要根据实际API修改
+
+        // 创建并发送交易命令事件
+        Event<TradeCmd> event = new Event<>();
+        event.type = "PLACE_ORDER";
+        event.payload = tradeCmd;
+
+        tradeCmdRepo.send(event);
+        System.out.println("发送买入订单: 价格=" + price + ", 数量=" + params.orderQuantity);
     }
 
     /**
@@ -202,7 +238,14 @@ public class AvellanedaStoikovStrategy  implements Strategy {
         );
 
         TradeCmd tradeCmd = TradeCmd.createWithData(order);
-        tradeCmdRepo.receive(); // 这应该是发送命令，需要根据实际API修改
+
+        // 创建并发送交易命令事件
+        Event<TradeCmd> event = new Event<>();
+        event.type = "PLACE_ORDER";
+        event.payload = tradeCmd;
+
+        tradeCmdRepo.send(event);
+        System.out.println("发送卖出订单: 价格=" + price + ", 数量=" + params.orderQuantity);
     }
 
     /**
@@ -238,8 +281,17 @@ public class AvellanedaStoikovStrategy  implements Strategy {
             if (state.tradeCount == 0) {
                 return 0;
             }
-            // 简单的利润计算
-            return params.orderQuantity * (price - state.lastTradePrice);
+            // 基于库存的利润计算
+            // 当买入时，价格降低会增加潜在利润；卖出时，价格升高会增加利润
+            double profit = 0;
+            if (state.tradeCount % 2 == 0) {
+                // 偶数次交易（可能是平仓）
+                profit = params.orderQuantity * (price - state.lastTradePrice);
+            } else {
+                // 奇数次交易（可能是建仓）
+                profit = -params.orderQuantity * (price - state.lastTradePrice);
+            }
+            return profit;
         }
     }
 

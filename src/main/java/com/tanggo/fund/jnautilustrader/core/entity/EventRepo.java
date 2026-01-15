@@ -10,4 +10,6 @@ public interface EventRepo<T> {
      * @return 任意类型的事件
      */
     Event<T> receive();
+
+    void send(Event<T> event );
 }
