@@ -1,8 +1,8 @@
 package com.tanggo.fund.jnautilustrader.adapter.http;
 
+import com.tanggo.fund.jnautilustrader.adapter.BlockingQueueEventRepo;
 import com.tanggo.fund.jnautilustrader.core.entity.Event;
 import com.tanggo.fund.jnautilustrader.core.entity.data.TradeTick;
-import com.tanggo.fund.jnautilustrader.adapter.BlockingQueueEventRepo;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 

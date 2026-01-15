@@ -26,10 +26,10 @@ import static org.mockito.Mockito.*;
 class ProcessTest {
 
     @Mock
-    private EventRepo<T> eventRepo;
+    private EventRepo<TradeTick> eventRepo;
 
     @Mock
-    private EventHandlerRepo<T> eventHandlerRepo;
+    private EventHandlerRepo<TradeTick> eventHandlerRepo;
 
     private Process process;
 
@@ -67,8 +67,8 @@ class ProcessTest {
         };
 
         // When: 模拟事件仓储返回事件（只返回一次，然后中断循环）
-        when(eventRepo.receive()).thenReturn((Event<?>) event).thenThrow(new RuntimeException("Loop interrupted"));
-        when(eventHandlerRepo.queryBy("TradeTick")).thenReturn((EventHandler<?>) handler);
+        when(eventRepo.receive()).thenReturn((Event<TradeTick>) event).thenThrow(new RuntimeException("Loop interrupted"));
+        when(eventHandlerRepo.queryBy("TradeTick")).thenReturn((EventHandler<TradeTick>) handler);
 
         // Then: 执行loop并验证处理器被调用
         assertThrows(RuntimeException.class, () -> process.loop());
@@ -103,8 +103,8 @@ class ProcessTest {
         };
 
         // When: 模拟事件
-        when(eventRepo.receive()).thenReturn((Event<?>) event).thenThrow(new RuntimeException("Loop interrupted"));
-        when(eventHandlerRepo.queryBy("OrderBookDelta")).thenReturn((EventHandler<?>) handler);
+        when(eventRepo.receive()).thenReturn((Event<TradeTick>) (Event<?>) event).thenThrow(new RuntimeException("Loop interrupted"));
+        when(eventHandlerRepo.queryBy("OrderBookDelta")).thenReturn((EventHandler<TradeTick>) (EventHandler<?>) handler);
 
         // Then: 验证
         assertThrows(RuntimeException.class, () -> process.loop());
