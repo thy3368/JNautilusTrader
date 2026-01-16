@@ -1,4 +1,4 @@
-package com.tanggo.fund.jnautilustrader.adapter.mdgw.bn;
+package com.tanggo.fund.jnautilustrader.adapter.mdgw.bitget;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,9 +26,9 @@ import java.util.concurrent.TimeUnit;
  * 币安WebSocket客户端 - 订阅实时交易数据
  */
 @Component
-public class BNMDGWWebSocketClient implements Actor {
+public class BTMDGWWebSocketClient implements Actor {
 
-    private static final Logger logger = LoggerFactory.getLogger(BNMDGWWebSocketClient.class);
+    private static final Logger logger = LoggerFactory.getLogger(BTMDGWWebSocketClient.class);
     // 币安WebSocket API地址 - 同时订阅交易、订单簿深度和增量更新
     private static final String BINANCE_WS_URL = "wss://stream.binance.com:9443/stream?streams=btcusdt@trade/btcusdt@depth/btcusdt@depthUpdate";
     // 重连间隔（秒）
@@ -39,7 +39,7 @@ public class BNMDGWWebSocketClient implements Actor {
     private WebSocket webSocket;
     private volatile boolean reconnecting;
 
-    public BNMDGWWebSocketClient(BlockingQueueEventRepo<MarketData> mdEventRepo) {
+    public BTMDGWWebSocketClient(BlockingQueueEventRepo<MarketData> mdEventRepo) {
         this.mdEventRepo = mdEventRepo;
         this.objectMapper = new ObjectMapper();
         this.reconnectScheduler = Executors.newSingleThreadScheduledExecutor();
@@ -343,7 +343,7 @@ public class BNMDGWWebSocketClient implements Actor {
         @Override
         public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
             logger.info("Binance WebSocket connection closed: status={}, reason={}", statusCode, reason);
-            BNMDGWWebSocketClient.this.webSocket = null;
+            BTMDGWWebSocketClient.this.webSocket = null;
             // 自动重连
             scheduleReconnect();
             return WebSocket.Listener.super.onClose(webSocket, statusCode, reason);

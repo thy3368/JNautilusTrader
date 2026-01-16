@@ -80,4 +80,12 @@ public class AvellanedaStoikovState {
                 currentTime, inventory, tradeCount, totalProfit,
                 midPrice, bestBid, bestAsk);
     }
+
+    public void start() {
+        this.isRunning = true;
+        this.startTime = System.currentTimeMillis();
+        this.currentTime = 0;
+//        this.inventory = params.initialInventory;
+
+    }
 }

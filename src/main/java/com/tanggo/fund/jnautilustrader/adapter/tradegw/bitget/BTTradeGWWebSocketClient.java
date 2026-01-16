@@ -1,4 +1,4 @@
-package com.tanggo.fund.jnautilustrader.adapter.tradegw.bn;
+package com.tanggo.fund.jnautilustrader.adapter.tradegw.bitget;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -30,9 +30,9 @@ import java.util.concurrent.TimeUnit;
  * 负责连接币安交易WebSocket API，发送交易命令并处理响应
  */
 @Component
-public class BNTradeGWWebSocketClient implements Actor {
+public class BTTradeGWWebSocketClient implements Actor {
 
-    private static final Logger logger = LoggerFactory.getLogger(BNTradeGWWebSocketClient.class);
+    private static final Logger logger = LoggerFactory.getLogger(BTTradeGWWebSocketClient.class);
 
     private final BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo;
 
@@ -47,10 +47,9 @@ public class BNTradeGWWebSocketClient implements Actor {
     private WebSocket webSocket;
     private volatile boolean connected = false;
 
-    public BNTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo, BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo) {
+    public BTTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo, BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo) {
         this.marketDataBlockingQueueEventRepo = marketDataBlockingQueueEventRepo;
         this.tradeCmdEventRepo = tradeCmdEventRepo;
-        this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newHttpClient();
     }
 

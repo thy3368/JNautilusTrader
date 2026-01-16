@@ -1,14 +1,13 @@
 package com.tanggo.fund.jnautilustrader.adapter.http;
 
+import com.tanggo.fund.jnautilustrader.adapter.event_repo.BlockingQueueEventRepo;
 import com.tanggo.fund.jnautilustrader.core.entity.Event;
 import com.tanggo.fund.jnautilustrader.core.entity.data.TradeTick;
-import com.tanggo.fund.jnautilustrader.adapter.BlockingQueueEventRepo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 
 /**
@@ -20,13 +19,10 @@ public class WebSocketEventController {
     private static final Logger logger = LoggerFactory.getLogger(WebSocketEventController.class);
 
     private final BlockingQueueEventRepo<TradeTick> eventRepo;
-    private final SimpMessagingTemplate messagingTemplate;
 
     @Autowired
-    public WebSocketEventController(BlockingQueueEventRepo<TradeTick> eventRepo,
-                                     SimpMessagingTemplate messagingTemplate) {
+    public WebSocketEventController(BlockingQueueEventRepo<TradeTick> eventRepo) {
         this.eventRepo = eventRepo;
-        this.messagingTemplate = messagingTemplate;
     }
 
     /**
@@ -40,11 +36,5 @@ public class WebSocketEventController {
         return event;
     }
 
-    /**
-     * 广播事件到所有客户端
-     */
-    public void broadcastEvent(Event<TradeTick> event) {
-        logger.debug("Broadcasting event: type={}", event.type);
-        messagingTemplate.convertAndSend("/topic/events", event);
-    }
+
 }

@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit;
  */
 
 @Component
-public class AvellanedaStoikovStrategy implements Strategy {
+public class AvellanedaStoikovStrategy implements Actor {
 
     // 策略参数 todo可以repo
     private final AvellanedaStoikovParams params;
@@ -71,10 +71,15 @@ public class AvellanedaStoikovStrategy implements Strategy {
      */
     @Override
     public void start() {
-        state.isRunning = true;
-        state.startTime = System.currentTimeMillis();
-        state.currentTime = 0;
+
+
+
+//         /Users/hongyaotang/src/JNautilusTrader/src/main/java/com/tanggo/fund/jnautilustrader/adapter/event_repo/ParquetFileQueueEventRepo.java todo 通过ParquetFile读写事件
+
+
+        state.start();
         state.inventory = params.initialInventory;
+
 
         System.out.println("Avellaneda-Stoikov 策略启动成功");
         System.out.println("策略参数: " + params);

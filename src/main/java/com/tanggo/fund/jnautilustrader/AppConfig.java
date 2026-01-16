@@ -1,7 +1,7 @@
 package com.tanggo.fund.jnautilustrader;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.tanggo.fund.jnautilustrader.adapter.BlockingQueueEventRepo;
+import com.tanggo.fund.jnautilustrader.adapter.event_repo.BlockingQueueEventRepo;
 import com.tanggo.fund.jnautilustrader.adapter.mdgw.bn.BNMDGWWebSocketClient;
 import com.tanggo.fund.jnautilustrader.adapter.tradegw.bn.BNTradeGWWebSocketClient;
 import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
@@ -33,8 +33,8 @@ public class AppConfig {
     }
 
     @Bean
-    public BNTradeGWWebSocketClient bnTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataEventRepo, BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo, ObjectMapper objectMapper) {
-        return new BNTradeGWWebSocketClient(marketDataEventRepo, tradeCmdEventRepo, objectMapper);
+    public BNTradeGWWebSocketClient bnTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataEventRepo, BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo) {
+        return new BNTradeGWWebSocketClient(marketDataEventRepo, tradeCmdEventRepo);
     }
 
 }

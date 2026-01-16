@@ -1,4 +1,4 @@
-package com.tanggo.fund.jnautilustrader.adapter;
+package com.tanggo.fund.jnautilustrader.adapter.event_repo;
 
 import com.tanggo.fund.jnautilustrader.core.entity.Event;
 import com.tanggo.fund.jnautilustrader.core.entity.EventRepo;
