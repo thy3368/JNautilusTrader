@@ -10,18 +10,14 @@ import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
 import com.tanggo.fund.jnautilustrader.core.entity.TradeCmd;
 import com.tanggo.fund.jnautilustrader.core.entity.data.PlaceOrder;
 import com.tanggo.fund.jnautilustrader.core.entity.data.TradeTick;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -29,35 +25,58 @@ import java.util.concurrent.TimeUnit;
  * 币安WebSocket交易网关客户端
  * 负责连接币安交易WebSocket API，发送交易命令并处理响应
  */
-@Component
 public class BNTradeGWWebSocketClient implements Actor {
 
     private static final Logger logger = LoggerFactory.getLogger(BNTradeGWWebSocketClient.class);
 
-    private final BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo;
+    private BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo;
 
 
-    private final BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo;
-    private final ObjectMapper objectMapper;
-    private final ScheduledExecutorService reconnectExecutor = Executors.newSingleThreadScheduledExecutor();
-    private final HttpClient httpClient;
+    private BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo;
+    private ObjectMapper objectMapper;
+    private ScheduledExecutorService reconnectExecutor;
+    private boolean ownScheduler; // 标记是否自己创建的调度器
+    private HttpClient httpClient;
     @Value("${binance.websocket.trade.url:wss://stream.binance.com:9443/ws}")
     private String baseWebSocketUrl;
     private String listenKey; // 币安WebSocket用户数据流监听密钥
     private WebSocket webSocket;
     private volatile boolean connected = false;
 
-    public BNTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo, BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo) {
-        this.marketDataBlockingQueueEventRepo = marketDataBlockingQueueEventRepo;
-        this.tradeCmdEventRepo = tradeCmdEventRepo;
+    /**
+     * 无参构造函数 - Spring需要
+     */
+    public BNTradeGWWebSocketClient() {
         this.objectMapper = new ObjectMapper();
         this.httpClient = HttpClient.newHttpClient();
+        this.ownScheduler = true;
     }
+
+    /**
+     * 构造函数 - 用于注入依赖
+     */
+    public BNTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo,
+                                     BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo) {
+        this();
+        this.marketDataBlockingQueueEventRepo = marketDataBlockingQueueEventRepo;
+        this.tradeCmdEventRepo = tradeCmdEventRepo;
+    }
+
+    /**
+     * 构造函数 - 包含所有依赖
+     */
+    public BNTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo,
+                                     BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo,
+                                     ScheduledExecutorService reconnectExecutor) {
+        this(marketDataBlockingQueueEventRepo, tradeCmdEventRepo);
+        this.reconnectExecutor = reconnectExecutor;
+        this.ownScheduler = false;
+    }
+
 
     /**
      * 初始化连接
      */
-    @PostConstruct
     public void init() {
         logger.info("初始化币安交易WebSocket客户端");
         connect();
@@ -228,19 +247,21 @@ public class BNTradeGWWebSocketClient implements Actor {
     /**
      * 资源清理
      */
-    @PreDestroy
     public void destroy() {
         logger.info("正在关闭币安交易WebSocket客户端");
         connected = false;
         closeWebSocket();
-        reconnectExecutor.shutdown();
-        try {
-            if (!reconnectExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+        // 只关闭自己创建的调度器
+        if (ownScheduler && reconnectExecutor != null) {
+            reconnectExecutor.shutdown();
+            try {
+                if (!reconnectExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    reconnectExecutor.shutdownNow();
+                }
+            } catch (InterruptedException e) {
                 reconnectExecutor.shutdownNow();
+                Thread.currentThread().interrupt();
             }
-        } catch (InterruptedException e) {
-            reconnectExecutor.shutdownNow();
-            Thread.currentThread().interrupt();
         }
         logger.info("币安交易WebSocket客户端已关闭");
     }

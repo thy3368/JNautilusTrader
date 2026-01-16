@@ -22,7 +22,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 /**
  * 事件仓储实现 - 通过ParquetFile读写事件
  */
-@Component
+
 public class ParquetFileQueueEventRepo<T> implements EventRepo<T>, Closeable {
 
     private final BlockingQueue<Event<T>> eventQueue;

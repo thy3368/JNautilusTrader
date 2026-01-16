@@ -10,7 +10,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 /**
  * 事件仓储实现 - 通过HTTP服务器接收事件
  */
-@Component
 public class BlockingQueueEventRepo<T> implements EventRepo<T> {
 
     private final BlockingQueue<Event<T>> eventQueue;

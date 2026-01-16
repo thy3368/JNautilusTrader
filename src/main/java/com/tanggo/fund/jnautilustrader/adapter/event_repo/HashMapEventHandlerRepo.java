@@ -10,7 +10,7 @@ import java.util.Map;
 /**
  * 事件处理器仓储实现 - 使用内存存储事件处理器
  */
-@Component
+
 public class HashMapEventHandlerRepo<T> implements EventHandlerRepo<T> {
 
     private final Map<String, EventHandler<T>> handlers;

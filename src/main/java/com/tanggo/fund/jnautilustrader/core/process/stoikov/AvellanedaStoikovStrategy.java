@@ -33,7 +33,6 @@ import java.util.concurrent.TimeUnit;
  * @version 1.0
  */
 
-@Component
 public class AvellanedaStoikovStrategy implements Actor {
 
     // 策略参数 todo可以repo

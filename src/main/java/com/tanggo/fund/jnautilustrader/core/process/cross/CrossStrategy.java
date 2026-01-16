@@ -4,8 +4,12 @@ import com.tanggo.fund.jnautilustrader.core.entity.*;
 import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDepth10;
 import com.tanggo.fund.jnautilustrader.core.entity.data.PlaceOrder;
 import com.tanggo.fund.jnautilustrader.core.entity.data.TradeTick;
-import org.springframework.stereotype.Component;
+import lombok.Data;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -24,52 +28,34 @@ import java.util.concurrent.TimeUnit;
  * @author JNautilusTrader
  * @version 1.0
  */
-@Component
+
+@Data
 public class CrossStrategy implements Actor {
 
+    private static final Logger logger = LoggerFactory.getLogger(CrossStrategy.class);
+
     // 策略参数
-    private final CrossArbitrageParams params;
+    private CrossArbitrageParams params;
     // 策略状态
-    private final CrossArbitrageState state;
+    private CrossArbitrageState state;
 
     // 事件仓库
-    private final EventRepo<MarketData> marketDataRepo;
-    private final EventRepo<TradeCmd> tradeCmdRepo;
-    private final EventHandlerRepo<MarketData> eventHandlerRepo;
+    private EventRepo<MarketData> marketDataRepo;
+    private EventRepo<TradeCmd> tradeCmdRepo;
+    private EventHandlerRepo<MarketData> eventHandlerRepo;
+    // 线程池引用，用于资源清理
+    private ExecutorService strategyExecutorService;
+    private ExecutorService eventExecutorService;
 
-    // 线程引用，用于资源清理
-    private Thread eventThread;
-    private Thread strategyThread;
+    // 用于跟踪提交的任务
+    private Future<?> eventTaskFuture;
+    private Future<?> strategyTaskFuture;
 
-    // 默认构造函数，用于Spring自动装配
-    public CrossStrategy() {
-        this.marketDataRepo = null;
-        this.tradeCmdRepo = null;
-        this.eventHandlerRepo = null;
-        this.params = CrossArbitrageParams.defaultParams();
-        this.state = CrossArbitrageState.initialState();
-    }
-
-    public CrossStrategy(EventRepo<MarketData> marketDataRepo, EventRepo<TradeCmd> tradeCmdRepo,
-                         EventHandlerRepo<MarketData> eventHandlerRepo) {
-        this(marketDataRepo, tradeCmdRepo, eventHandlerRepo, CrossArbitrageParams.defaultParams());
-    }
-
-    public CrossStrategy(EventRepo<MarketData> marketDataRepo, EventRepo<TradeCmd> tradeCmdRepo,
-                         EventHandlerRepo<MarketData> eventHandlerRepo, CrossArbitrageParams params) {
-        this.marketDataRepo = marketDataRepo;
-        this.tradeCmdRepo = tradeCmdRepo;
-        this.eventHandlerRepo = eventHandlerRepo;
-        this.params = params;
-        this.state = CrossArbitrageState.initialState();
-
-        // 注册事件处理器
-        registerEventHandlers();
-    }
 
     /**
      * 注册市场数据事件处理器
      */
+    //todo
     private void registerEventHandlers() {
         if (eventHandlerRepo != null) {
             eventHandlerRepo.addHandler("BINANCE_TRADE_TICK", new BinanceTradeTickEventHandler());
@@ -86,61 +72,69 @@ public class CrossStrategy implements Actor {
     public void start() {
         state.start();
 
-        System.out.println("跨币安和Bitget现货BTC套利策略启动成功");
-        System.out.println("策略参数: " + params);
+        logger.info("跨币安和Bitget现货BTC套利策略启动成功");
+        logger.info("策略参数: {}", params);
 
         // 启动事件处理线程
-        eventThread = new Thread(() -> {
-            while (state.isRunning()) {
+        if (eventExecutorService != null) {
+            eventTaskFuture = eventExecutorService.submit(() -> {
                 try {
-                    Event<MarketData> event = marketDataRepo.receive();
-                    if (event != null) {
-                        EventHandler<MarketData> handler = eventHandlerRepo.queryBy(event.type);
-                        if (handler != null) {
-                            handler.handle(event);
-                        } else {
-                            System.out.println("未找到事件处理器: " + event.type);
+                    while (state.isRunning()) {
+                        try {
+                            Event<MarketData> event = marketDataRepo.receive();
+                            if (event != null) {
+                                EventHandler<MarketData> handler = eventHandlerRepo.queryBy(event.type);
+                                if (handler != null) {
+                                    handler.handle(event);
+                                } else {
+                                    logger.debug("未找到事件处理器: {}", event.type);
+                                }
+                            }
+                            TimeUnit.MILLISECONDS.sleep(10);
+                        } catch (InterruptedException e) {
+                            logger.info("事件处理线程被中断");
+                            Thread.currentThread().interrupt();
+                            break;
+                        } catch (Exception e) {
+                            logger.error("事件处理失败", e);
                         }
                     }
-                    TimeUnit.MILLISECONDS.sleep(10);
-                } catch (InterruptedException e) {
-                    System.out.println("事件处理线程被中断");
-                    state.setRunning(false);
-                } catch (Exception e) {
-                    System.out.println("事件处理失败: " + e.getMessage());
-                    e.printStackTrace();
+                } finally {
+                    logger.info("事件处理线程已退出");
                 }
-            }
-        });
-
-        eventThread.start();
+            });
+        }
 
         // 启动策略执行线程
-        strategyThread = new Thread(() -> {
-            while (state.isRunning() && state.getCurrentTime() < params.getRunTime()) {
+        if (strategyExecutorService != null) {
+            strategyTaskFuture = strategyExecutorService.submit(() -> {
                 try {
-                    // 更新当前时间
-                    state.updateState();
+                    while (state.isRunning() && state.getCurrentTime() < params.getRunTime()) {
+                        try {
+                            // 更新当前时间
+                            state.updateState();
 
-                    // 执行策略逻辑
-                    executeStrategy();
+                            // 执行策略逻辑
+                            executeStrategy();
 
-                    // 等待下一次执行
-                    TimeUnit.MILLISECONDS.sleep(params.getCheckInterval());
-                } catch (InterruptedException e) {
-                    System.out.println("策略执行线程被中断");
-                    state.setRunning(false);
-                } catch (Exception e) {
-                    System.out.println("策略执行失败: " + e.getMessage());
-                    e.printStackTrace();
+                            // 等待下一次执行
+                            TimeUnit.MILLISECONDS.sleep(params.getCheckInterval());
+                        } catch (InterruptedException e) {
+                            logger.info("策略执行线程被中断");
+                            Thread.currentThread().interrupt();
+                            break;
+                        } catch (Exception e) {
+                            logger.error("策略执行失败", e);
+                        }
+                    }
+
+                    state.stop();
+                    logger.info("策略执行完成");
+                } finally {
+                    logger.info("策略执行线程已退出");
                 }
-            }
-
-            state.stop();
-            System.out.println("策略执行完成");
-        });
-
-        strategyThread.start();
+            });
+        }
     }
 
     /**
@@ -148,27 +142,30 @@ public class CrossStrategy implements Actor {
      */
     @Override
     public void stop() {
-        System.out.println("正在停止策略...");
+        logger.info("正在停止策略...");
         state.stop();
 
-        // 中断并等待线程结束
-        if (eventThread != null && eventThread.isAlive()) {
-            eventThread.interrupt();
+        // 取消事件处理任务
+        if (eventTaskFuture != null && !eventTaskFuture.isDone()) {
+            logger.debug("取消事件处理任务");
+            eventTaskFuture.cancel(true);
             try {
-                eventThread.join(5000);
-            } catch (InterruptedException e) {
-                System.out.println("等待事件处理线程结束时被中断");
-                Thread.currentThread().interrupt();
+                // 等待任务完成，最多等待5秒
+                eventTaskFuture.get(5, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                logger.warn("等待事件处理任务完成时发生异常", e);
             }
         }
 
-        if (strategyThread != null && strategyThread.isAlive()) {
-            strategyThread.interrupt();
+        // 取消策略执行任务
+        if (strategyTaskFuture != null && !strategyTaskFuture.isDone()) {
+            logger.debug("取消策略执行任务");
+            strategyTaskFuture.cancel(true);
             try {
-                strategyThread.join(5000);
-            } catch (InterruptedException e) {
-                System.out.println("等待策略执行线程结束时被中断");
-                Thread.currentThread().interrupt();
+                // 等待任务完成，最多等待5秒
+                strategyTaskFuture.get(5, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                logger.warn("等待策略执行任务完成时发生异常", e);
             }
         }
 
@@ -180,24 +177,30 @@ public class CrossStrategy implements Actor {
      * 打印策略执行结果摘要
      */
     private void printStrategySummary() {
-        System.out.println("=== 跨交易所套利策略执行结果 ===");
-        System.out.println("运行时间: " + String.format("%.2f", state.getCurrentTime()) + " 秒");
-        System.out.println("总套利次数: " + state.getArbitrageCount());
-        System.out.println("成功次数: " + state.getSuccessfulArbitrageCount());
-        System.out.println("失败次数: " + state.getFailedArbitrageCount());
-        System.out.println("成功率: " + String.format("%.2f",
-                (double) state.getSuccessfulArbitrageCount() / state.getArbitrageCount() * 100) + "%");
-        System.out.println("总利润: " + String.format("%.4f", state.getTotalProfit()) + " USDT");
-        System.out.println("平均每次利润: " + String.format("%.6f",
-                state.getTotalProfit() / state.getSuccessfulArbitrageCount()) + " USDT");
-        System.out.println("总交易量: " + String.format("%.4f", state.getTotalVolume()) + " BTC");
-        System.out.println("最终持仓: " + String.format("%.6f", state.getCurrentPosition()) + " BTC");
-        System.out.println("最大持仓: " + String.format("%.6f", state.getMaxPosition()) + " BTC");
-        System.out.println("最小持仓: " + String.format("%.6f", state.getMinPosition()) + " BTC");
-        System.out.println("平均持仓: " + String.format("%.6f", state.getAvgPosition()) + " BTC");
-        System.out.println("最大价差: " + String.format("%.4f", state.getMaxSpreadPercentage()) + "%");
-        System.out.println("平均价差: " + String.format("%.4f", state.getAvgSpreadPercentage()) + "%");
-        System.out.println("策略已停止");
+        logger.info("=== 跨交易所套利策略执行结果 ===");
+        logger.info("运行时间: {} 秒", String.format("%.2f", state.getCurrentTime()));
+        logger.info("总套利次数: {}", state.getArbitrageCount());
+        logger.info("成功次数: {}", state.getSuccessfulArbitrageCount());
+        logger.info("失败次数: {}", state.getFailedArbitrageCount());
+
+        if (state.getArbitrageCount() > 0) {
+            logger.info("成功率: {}%", String.format("%.2f", (double) state.getSuccessfulArbitrageCount() / state.getArbitrageCount() * 100));
+        }
+
+        logger.info("总利润: {} USDT", String.format("%.4f", state.getTotalProfit()));
+
+        if (state.getSuccessfulArbitrageCount() > 0) {
+            logger.info("平均每次利润: {} USDT", String.format("%.6f", state.getTotalProfit() / state.getSuccessfulArbitrageCount()));
+        }
+
+        logger.info("总交易量: {} BTC", String.format("%.4f", state.getTotalVolume()));
+        logger.info("最终持仓: {} BTC", String.format("%.6f", state.getCurrentPosition()));
+        logger.info("最大持仓: {} BTC", String.format("%.6f", state.getMaxPosition()));
+        logger.info("最小持仓: {} BTC", String.format("%.6f", state.getMinPosition()));
+        logger.info("平均持仓: {} BTC", String.format("%.6f", state.getAvgPosition()));
+        logger.info("最大价差: {}%", String.format("%.4f", state.getMaxSpreadPercentage()));
+        logger.info("平均价差: {}%", String.format("%.4f", state.getAvgSpreadPercentage()));
+        logger.info("策略已停止");
     }
 
     /**
@@ -208,7 +211,7 @@ public class CrossStrategy implements Actor {
         if (!state.canArbitrage(1000)) { // 1秒内只能套利一次
             if (params.isDebugMode() && state.hasValidMarketData()) {
                 double spreadPercentage = state.calculateSpreadPercentage();
-                System.out.println("价差: " + String.format("%.4f", spreadPercentage) + "%, 未达到套利阈值: " + params.getArbitrageThreshold() + "%");
+                logger.debug("价差: {}%, 未达到套利阈值: {}%", String.format("%.4f", spreadPercentage), params.getArbitrageThreshold());
             }
             return;
         }
@@ -219,7 +222,7 @@ public class CrossStrategy implements Actor {
         // 检查是否满足套利条件
         if (!params.shouldArbitrage(state.getBinanceMidPrice(), state.getBitgetMidPrice())) {
             if (params.isDebugMode()) {
-                System.out.println("价差: " + String.format("%.4f", spreadPercentage) + "%, 未达到套利阈值: " + params.getArbitrageThreshold() + "%");
+                logger.debug("价差: {}%, 未达到套利阈值: {}%", String.format("%.4f", spreadPercentage), params.getArbitrageThreshold());
             }
             return;
         }
@@ -238,8 +241,7 @@ public class CrossStrategy implements Actor {
      * 执行套利操作
      */
     private void executeArbitrage(String buyExchange, String sellExchange, double buyPrice, double sellPrice) {
-        System.out.println("发现套利机会: " + buyExchange + "买入价=" + String.format("%.2f", buyPrice) +
-                ", " + sellExchange + "卖出价=" + String.format("%.2f", sellPrice));
+        logger.info("发现套利机会: {}买入价={}, {}卖出价={}", buyExchange, String.format("%.2f", buyPrice), sellExchange, String.format("%.2f", sellPrice));
 
         // 计算套利成本和收益
         double buyCost = params.calculateTotalCost(buyPrice, params.getOrderQuantity(), buyExchange);
@@ -248,14 +250,14 @@ public class CrossStrategy implements Actor {
 
         // 检查最小利润条件
         if (profit < params.getMinProfit()) {
-            System.out.println("套利利润未达到最小利润要求: " + String.format("%.6f", profit) + " USDT < " + params.getMinProfit() + " USDT");
+            logger.info("套利利润未达到最小利润要求: {} USDT < {} USDT", String.format("%.6f", profit), params.getMinProfit());
             state.recordArbitrage(false, 0, 0);
             return;
         }
 
         // 风险管理检查
         if (!checkRiskManagement()) {
-            System.out.println("风险管理检查失败，取消套利操作");
+            logger.warn("风险管理检查失败，取消套利操作");
             state.recordArbitrage(false, 0, 0);
             return;
         }
@@ -265,10 +267,10 @@ public class CrossStrategy implements Actor {
         boolean sellSuccess = sendSellOrder(sellExchange, sellPrice);
 
         if (buySuccess && sellSuccess) {
-            System.out.println("套利成功! 利润: " + String.format("%.6f", profit) + " USDT");
+            logger.info("套利成功! 利润: {} USDT", String.format("%.6f", profit));
             state.recordArbitrage(true, profit, 0); // 跨交易所套利通常是对冲交易，净持仓为0
         } else {
-            System.out.println("套利失败! 买入或卖出订单发送失败");
+            logger.error("套利失败! 买入或卖出订单发送失败");
             state.recordArbitrage(false, 0, 0);
 
             // 如果只有一个订单成功，需要尝试撤销另一个
@@ -287,13 +289,13 @@ public class CrossStrategy implements Actor {
     private boolean checkRiskManagement() {
         // 检查持仓限制
         if (Math.abs(state.getCurrentPosition()) >= params.getMaxPositionLimit()) {
-            System.out.println("持仓超过限制: " + String.format("%.6f", state.getCurrentPosition()) + " BTC >= " + params.getMaxPositionLimit() + " BTC");
+            logger.warn("持仓超过限制: {} BTC >= {} BTC", String.format("%.6f", state.getCurrentPosition()), params.getMaxPositionLimit());
             return false;
         }
 
         // 检查价格合理性
         if (state.getBinanceMidPrice() == 0 || state.getBitgetMidPrice() == 0) {
-            System.out.println("无效的市场价格");
+            logger.warn("无效的市场价格");
             return false;
         }
 
@@ -313,11 +315,9 @@ public class CrossStrategy implements Actor {
 
         boolean sent = tradeCmdRepo.send(event);
         if (sent) {
-            System.out.println(exchange + "发送买入订单成功: 价格=" + String.format("%.2f", price) +
-                    ", 数量=" + params.getOrderQuantity() + " BTC");
+            logger.info("{}发送买入订单成功: 价格={}, 数量={} BTC", exchange, String.format("%.2f", price), params.getOrderQuantity());
         } else {
-            System.out.println(exchange + "发送买入订单失败: 价格=" + String.format("%.2f", price) +
-                    ", 数量=" + params.getOrderQuantity() + " BTC");
+            logger.error("{}发送买入订单失败: 价格={}, 数量={} BTC", exchange, String.format("%.2f", price), params.getOrderQuantity());
         }
         return sent;
     }
@@ -335,11 +335,9 @@ public class CrossStrategy implements Actor {
 
         boolean sent = tradeCmdRepo.send(event);
         if (sent) {
-            System.out.println(exchange + "发送卖出订单成功: 价格=" + String.format("%.2f", price) +
-                    ", 数量=" + params.getOrderQuantity() + " BTC");
+            logger.info("{}发送卖出订单成功: 价格={}, 数量={} BTC", exchange, String.format("%.2f", price), params.getOrderQuantity());
         } else {
-            System.out.println(exchange + "发送卖出订单失败: 价格=" + String.format("%.2f", price) +
-                    ", 数量=" + params.getOrderQuantity() + " BTC");
+            logger.error("{}发送卖出订单失败: 价格={}, 数量={} BTC", exchange, String.format("%.2f", price), params.getOrderQuantity());
         }
         return sent;
     }
@@ -348,8 +346,8 @@ public class CrossStrategy implements Actor {
      * 取消订单
      */
     private void cancelOrders(String exchange) {
-        System.out.println("取消" + exchange + "的未成交订单");
-        // todo: 实现取消订单逻辑
+        logger.warn("取消{}的未成交订单", exchange);
+        // TODO: 实现取消订单逻辑
     }
 
     /**
@@ -362,7 +360,7 @@ public class CrossStrategy implements Actor {
             if (marketData.getMessage() instanceof TradeTick tradeTick) {
                 state.setBinanceMidPrice(tradeTick.price);
                 if (params.isDebugMode()) {
-                    System.out.println("币安最新成交价: " + String.format("%.2f", tradeTick.price));
+                    logger.debug("币安最新成交价: {}", String.format("%.2f", tradeTick.price));
                 }
             }
         }
@@ -403,7 +401,7 @@ public class CrossStrategy implements Actor {
             if (marketData.getMessage() instanceof TradeTick tradeTick) {
                 state.setBitgetMidPrice(tradeTick.price);
                 if (params.isDebugMode()) {
-                    System.out.println("Bitget最新成交价: " + String.format("%.2f", tradeTick.price));
+                    logger.debug("Bitget最新成交价: {}", String.format("%.2f", tradeTick.price));
                 }
             }
         }
@@ -433,4 +431,43 @@ public class CrossStrategy implements Actor {
             }
         }
     }
+
+    // Setter methods for Spring dependency injection
+
+    public void setParams(CrossArbitrageParams params) {
+        this.params = params;
+        // 初始化策略状态
+        if (this.state == null) {
+            this.state = new CrossArbitrageState(params);
+        } else {
+            this.state.setParams(params);
+        }
+    }
+
+    public void setState(CrossArbitrageState state) {
+        this.state = state;
+    }
+
+    public void setMarketDataRepo(EventRepo<MarketData> marketDataRepo) {
+        this.marketDataRepo = marketDataRepo;
+    }
+
+    public void setTradeCmdRepo(EventRepo<TradeCmd> tradeCmdRepo) {
+        this.tradeCmdRepo = tradeCmdRepo;
+    }
+
+    public void setEventHandlerRepo(EventHandlerRepo<MarketData> eventHandlerRepo) {
+        this.eventHandlerRepo = eventHandlerRepo;
+        // 注册事件处理器
+        registerEventHandlers();
+    }
+
+    public void setStrategyExecutorService(ExecutorService strategyExecutorService) {
+        this.strategyExecutorService = strategyExecutorService;
+    }
+
+    public void setEventExecutorService(ExecutorService eventExecutorService) {
+        this.eventExecutorService = eventExecutorService;
+    }
 }
+

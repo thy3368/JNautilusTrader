@@ -29,34 +29,58 @@ import java.util.concurrent.TimeUnit;
  * Bitget WebSocket交易网关客户端
  * 负责连接Bitget交易WebSocket API，发送交易命令并处理响应
  */
-@Component
 public class BTTradeGWWebSocketClient implements Actor {
 
     private static final Logger logger = LoggerFactory.getLogger(BTTradeGWWebSocketClient.class);
 
-    private final BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo;
+    private BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo;
 
-    private final BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo;
-    private final ObjectMapper objectMapper;
-    private final ScheduledExecutorService reconnectExecutor = Executors.newSingleThreadScheduledExecutor();
-    private final HttpClient httpClient;
+    private BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo;
+    private ObjectMapper objectMapper;
+    private ScheduledExecutorService reconnectExecutor;
+    private boolean ownScheduler; // 标记是否自己创建的调度器
+    private HttpClient httpClient;
+
+    /**
+     * 无参构造函数 - Spring需要
+     */
+    public BTTradeGWWebSocketClient() {
+        this.objectMapper = new ObjectMapper();
+        this.httpClient = HttpClient.newHttpClient();
+        this.ownScheduler = true;
+    }
+
+    /**
+     * 构造函数 - 用于注入依赖
+     */
+    public BTTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo,
+                                     BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo) {
+        this();
+        this.marketDataBlockingQueueEventRepo = marketDataBlockingQueueEventRepo;
+        this.tradeCmdEventRepo = tradeCmdEventRepo;
+    }
+
+    /**
+     * 构造函数 - 包含所有依赖
+     */
+    public BTTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo,
+                                     BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo,
+                                     ScheduledExecutorService reconnectExecutor) {
+        this(marketDataBlockingQueueEventRepo, tradeCmdEventRepo);
+        this.reconnectExecutor = reconnectExecutor;
+        this.ownScheduler = false;
+    }
     @Value("${bitget.websocket.trade.url:wss://ws.bitget.com/v2/ws/private}")
     private String baseWebSocketUrl;
     private String listenKey; // Bitget WebSocket用户数据流监听密钥
     private WebSocket webSocket;
     private volatile boolean connected = false;
 
-    public BTTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo, BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo) {
-        this.marketDataBlockingQueueEventRepo = marketDataBlockingQueueEventRepo;
-        this.tradeCmdEventRepo = tradeCmdEventRepo;
-        this.objectMapper = new ObjectMapper();
-        this.httpClient = HttpClient.newHttpClient();
-    }
+
 
     /**
      * 初始化连接
      */
-    @PostConstruct
     public void init() {
         logger.info("初始化Bitget交易WebSocket客户端");
         connect();
@@ -267,7 +291,6 @@ public class BTTradeGWWebSocketClient implements Actor {
     /**
      * 资源清理
      */
-    @PreDestroy
     public void destroy() {
         logger.info("正在关闭Bitget交易WebSocket客户端");
         connected = false;

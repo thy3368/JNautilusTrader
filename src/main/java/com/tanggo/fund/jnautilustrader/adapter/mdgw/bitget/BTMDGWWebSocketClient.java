@@ -9,7 +9,6 @@ import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
 import com.tanggo.fund.jnautilustrader.core.entity.data.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
@@ -18,14 +17,12 @@ import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Bitget WebSocket客户端 - 订阅实时交易数据
  */
-@Component
 public class BTMDGWWebSocketClient implements Actor {
 
     private static final Logger logger = LoggerFactory.getLogger(BTMDGWWebSocketClient.class);
@@ -33,17 +30,35 @@ public class BTMDGWWebSocketClient implements Actor {
     private static final String BITGET_WS_URL = "wss://ws.bitget.com/v2/ws/public";
     // 重连间隔（秒）
     private static final int RECONNECT_DELAY = 5;
-    private final BlockingQueueEventRepo<MarketData> mdEventRepo;
-    private final ObjectMapper objectMapper;
-    private final ScheduledExecutorService reconnectScheduler;
-    private WebSocket webSocket;
-    private volatile boolean reconnecting;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public BTMDGWWebSocketClient(BlockingQueueEventRepo<MarketData> mdEventRepo) {
-        this.mdEventRepo = mdEventRepo;
-        this.objectMapper = new ObjectMapper();
-        this.reconnectScheduler = Executors.newSingleThreadScheduledExecutor();
+    private BlockingQueueEventRepo<MarketData> mdEventRepo;
+    private ScheduledExecutorService timerExecutorService;
+    private WebSocket webSocket;
+    private volatile boolean reconnecting = false;
+
+    /**
+     * 无参构造函数 - Spring需要
+     */
+    public BTMDGWWebSocketClient() {
         this.reconnecting = false;
+    }
+
+    /**
+     * 构造函数 - 用于注入依赖
+     */
+    public BTMDGWWebSocketClient(BlockingQueueEventRepo<MarketData> mdEventRepo) {
+        this();
+        this.mdEventRepo = mdEventRepo;
+    }
+
+    /**
+     * 构造函数 - 包含所有依赖
+     */
+    public BTMDGWWebSocketClient(BlockingQueueEventRepo<MarketData> mdEventRepo,
+                                  ScheduledExecutorService timerExecutorService) {
+        this(mdEventRepo);
+        this.timerExecutorService = timerExecutorService;
     }
 
 
@@ -78,22 +93,7 @@ public class BTMDGWWebSocketClient implements Actor {
      */
     private void subscribeToMarkets() {
         try {
-            String subscribeMsg = "{\n" +
-                    "    \"op\": \"subscribe\",\n" +
-                    "    \"args\": [\n" +
-                    "        {\n" +
-                    "            \"instType\": \"SPOT\",\n" +
-                    "            \"instId\": \"BTCUSDT\",\n" +
-                    "            \"channel\": \"trade\"\n" +
-                    "        },\n" +
-                    "        {\n" +
-                    "            \"instType\": \"SPOT\",\n" +
-                    "            \"instId\": \"BTCUSDT\",\n" +
-                    "            \"channel\": \"books\",\n" +
-                    "            \"sz\": \"10\"\n" +
-                    "        }\n" +
-                    "    ]\n" +
-                    "}";
+            String subscribeMsg = "{\n" + "    \"op\": \"subscribe\",\n" + "    \"args\": [\n" + "        {\n" + "            \"instType\": \"SPOT\",\n" + "            \"instId\": \"BTCUSDT\",\n" + "            \"channel\": \"trade\"\n" + "        },\n" + "        {\n" + "            \"instType\": \"SPOT\",\n" + "            \"instId\": \"BTCUSDT\",\n" + "            \"channel\": \"books\",\n" + "            \"sz\": \"10\"\n" + "        }\n" + "    ]\n" + "}";
             webSocket.sendText(subscribeMsg, true);
             logger.info("Subscribed to Bitget market data channels");
         } catch (Exception e) {
@@ -106,7 +106,10 @@ public class BTMDGWWebSocketClient implements Actor {
      */
 
     private void destroy() {
-        reconnectScheduler.shutdown();
+        // 只关闭自己创建的调度器
+        if (timerExecutorService != null) {
+            timerExecutorService.shutdown();
+        }
         if (webSocket != null) {
             try {
                 webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Shutdown").join();
@@ -127,7 +130,7 @@ public class BTMDGWWebSocketClient implements Actor {
 
         reconnecting = true;
         logger.info("Scheduling reconnection in {} seconds", RECONNECT_DELAY);
-        reconnectScheduler.schedule(() -> {
+        timerExecutorService.schedule(() -> {
             reconnecting = false;
             logger.info("Attempting to reconnect to Bitget WebSocket");
             connect();
@@ -135,14 +138,12 @@ public class BTMDGWWebSocketClient implements Actor {
     }
 
     @Override
-    @PostConstruct
     public void start() {
         connect();
 
     }
 
     @Override
-    @PreDestroy
     public void stop() {
         destroy();
 

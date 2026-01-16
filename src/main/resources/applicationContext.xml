@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="
+        http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
+
+    <!-- 启用组件扫描 - 会自动扫描@Component注解的类,但排除WebSocket客户端(手动注册) -->
+    <context:component-scan base-package="com.tanggo.fund.jnautilustrader">
+        <context:exclude-filter type="regex" expression="com\.tanggo\.fund\.jnautilustrader\.adapter\.(mdgw|tradegw)\..*WebSocketClient"/>
+    </context:component-scan>
+
+    <!-- ==================== StrategyConfig - 策略配置 ==================== -->
+
+    <!-- StrategyConfig配置 - 配置市场数据客户端、交易客户端和策略 -->
+    <bean id="strategyConfig" class="com.tanggo.fund.jnautilustrader.StrategyConfig">
+        <!-- 市场数据客户端列表 -->
+        <property name="mdClients">
+            <list>
+                <ref bean="bnMDGWWebSocketClient"/>
+                <ref bean="btMDGWWebSocketClient"/>
+            </list>
+        </property>
+        <!-- 交易客户端列表 -->
+        <property name="tradeClients">
+            <list>
+                <ref bean="bnTradeGWWebSocketClient"/>
+                <ref bean="btTradeGWWebSocketClient"/>
+            </list>
+        </property>
+        <!-- 策略 -->
+        <property name="strategy" ref="crossStrategy"/>
+    </bean>
+
+    <!-- ==================== CrossStrategyConfig - 跨交易所策略配置 ==================== -->
+
+    <!-- 市场数据事件仓库 -->
+    <bean id="marketDataEventRepo" class="com.tanggo.fund.jnautilustrader.adapter.event_repo.BlockingQueueEventRepo">
+        <!-- 类型参数通过构造函数或setter注入，这里使用无参构造 -->
+    </bean>
+
+    <!-- 交易指令事件仓库 -->
+    <bean id="tradeCmdEventRepo" class="com.tanggo.fund.jnautilustrader.adapter.event_repo.BlockingQueueEventRepo">
+        <!-- 类型参数通过构造函数或setter注入，这里使用无参构造 -->
+    </bean>
+
+    <!-- 事件处理器仓库 -->
+    <bean id="eventHandlerRepo" class="com.tanggo.fund.jnautilustrader.adapter.event_repo.HashMapEventHandlerRepo"/>
+
+    <!-- 跨交易所套利参数 -->
+    <bean id="crossArbitrageParams" class="com.tanggo.fund.jnautilustrader.core.process.cross.CrossArbitrageParams"
+          factory-method="defaultParams"/>
+
+    <!-- 跨交易所套利策略 -->
+    <bean id="crossStrategy" class="com.tanggo.fund.jnautilustrader.core.process.cross.CrossStrategy">
+        <property name="params" ref="crossArbitrageParams"/>
+        <property name="marketDataRepo" ref="marketDataEventRepo"/>
+        <property name="tradeCmdRepo" ref="tradeCmdEventRepo"/>
+        <property name="eventHandlerRepo" ref="eventHandlerRepo"/>
+        <property name="strategyExecutorService" ref="strategyExecutorService"/>
+        <property name="eventExecutorService" ref="eventExecutorService"/>
+    </bean>
+
+    <!-- 币安市场数据网关WebSocket客户端 -->
+    <bean id="bnMDGWWebSocketClient" class="com.tanggo.fund.jnautilustrader.adapter.mdgw.bn.BNMDGWWebSocketClient">
+        <constructor-arg ref="marketDataEventRepo"/>
+        <constructor-arg ref="timerExecutorService"/>
+    </bean>
+
+    <!-- 币安交易网关WebSocket客户端 -->
+    <bean id="bnTradeGWWebSocketClient" class="com.tanggo.fund.jnautilustrader.adapter.tradegw.bn.BNTradeGWWebSocketClient">
+        <constructor-arg ref="marketDataEventRepo"/>
+        <constructor-arg ref="tradeCmdEventRepo"/>
+        <constructor-arg ref="timerExecutorService"/>
+    </bean>
+
+    <!-- Bitget市场数据网关WebSocket客户端 -->
+    <bean id="btMDGWWebSocketClient" class="com.tanggo.fund.jnautilustrader.adapter.mdgw.bitget.BTMDGWWebSocketClient">
+        <constructor-arg ref="marketDataEventRepo"/>
+        <constructor-arg ref="timerExecutorService"/>
+    </bean>
+
+    <!-- Bitget交易网关WebSocket客户端 -->
+    <bean id="btTradeGWWebSocketClient" class="com.tanggo.fund.jnautilustrader.adapter.tradegw.bitget.BTTradeGWWebSocketClient">
+        <constructor-arg ref="marketDataEventRepo"/>
+        <constructor-arg ref="tradeCmdEventRepo"/>
+        <constructor-arg ref="timerExecutorService"/>
+    </bean>
+
+    <!-- ==================== ThreadConfig - 高性能线程模型配置 ==================== -->
+
+    <!-- 线程池默认参数 -->
+    <bean id="threadPoolDefaults" class="org.springframework.beans.factory.config.PropertiesFactoryBean">
+        <property name="properties">
+            <props>
+                <prop key="corePoolSize">#{T(java.lang.Runtime).getRuntime().availableProcessors()}</prop>
+                <prop key="maxPoolSize">#{T(java.lang.Runtime).getRuntime().availableProcessors() * 2}</prop>
+                <prop key="queueCapacity">1024</prop>
+                <prop key="keepAliveTime">60</prop>
+            </props>
+        </property>
+    </bean>
+
+    <!-- ==================== 市场数据路径线程池 ==================== -->
+
+    <!-- 市场数据接收线程工厂 -->
+    <bean id="marketDataThreadFactory" class="org.springframework.scheduling.concurrent.CustomizableThreadFactory">
+        <constructor-arg value="md-receiver-"/>
+    </bean>
+
+    <!-- 市场数据处理线程工厂 -->
+    <bean id="marketDataProcessorThreadFactory" class="org.springframework.scheduling.concurrent.CustomizableThreadFactory">
+        <constructor-arg value="md-processor-"/>
+    </bean>
+
+    <!-- 市场数据接收线程池 -->
+    <bean id="marketDataExecutorService" class="java.util.concurrent.ThreadPoolExecutor">
+        <constructor-arg value="4"/> <!-- corePoolSize -->
+        <constructor-arg value="4"/> <!-- maxPoolSize -->
+        <constructor-arg value="0"/> <!-- keepAliveTime -->
+        <constructor-arg value="MILLISECONDS"/> <!-- timeUnit -->
+        <constructor-arg>
+            <bean class="java.util.concurrent.LinkedBlockingQueue">
+                <constructor-arg value="#{2 * 1024}"/> <!-- capacity -->
+            </bean>
+        </constructor-arg>
+        <constructor-arg ref="marketDataThreadFactory"/>
+        <constructor-arg>
+            <bean class="java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy"/>
+        </constructor-arg>
+    </bean>
+
+    <!-- 市场数据处理线程池 -->
+    <bean id="marketDataProcessorExecutorService" class="java.util.concurrent.ThreadPoolExecutor">
+        <constructor-arg value="#{T(java.lang.Runtime).getRuntime().availableProcessors()}"/> <!-- corePoolSize -->
+        <constructor-arg value="#{T(java.lang.Runtime).getRuntime().availableProcessors() * 2}"/> <!-- maxPoolSize -->
+        <constructor-arg value="60"/> <!-- keepAliveTime -->
+        <constructor-arg value="SECONDS"/> <!-- timeUnit -->
+        <constructor-arg>
+            <bean class="java.util.concurrent.LinkedBlockingQueue">
+                <constructor-arg value="#{2 * 1024}"/> <!-- capacity -->
+            </bean>
+        </constructor-arg>
+        <constructor-arg ref="marketDataProcessorThreadFactory"/>
+        <constructor-arg>
+            <bean class="java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy"/>
+        </constructor-arg>
+    </bean>
+
+    <!-- ==================== 交易执行路径线程池 ==================== -->
+
+    <!-- 交易指令执行线程工厂 -->
+    <bean id="tradingThreadFactory" class="org.springframework.scheduling.concurrent.CustomizableThreadFactory">
+        <constructor-arg value="trading-executor-"/>
+    </bean>
+
+    <!-- 交易指令执行线程池 -->
+    <bean id="tradingExecutorService" class="java.util.concurrent.ThreadPoolExecutor">
+        <constructor-arg value="4"/> <!-- corePoolSize -->
+        <constructor-arg value="4"/> <!-- maxPoolSize -->
+        <constructor-arg value="0"/> <!-- keepAliveTime -->
+        <constructor-arg value="MILLISECONDS"/> <!-- timeUnit -->
+        <constructor-arg>
+            <bean class="java.util.concurrent.LinkedBlockingQueue">
+                <constructor-arg value="256"/> <!-- capacity -->
+            </bean>
+        </constructor-arg>
+        <constructor-arg ref="tradingThreadFactory"/>
+        <constructor-arg>
+            <bean class="java.util.concurrent.ThreadPoolExecutor.AbortPolicy"/>
+        </constructor-arg>
+    </bean>
+
+    <!-- ==================== 策略计算路径线程池 ==================== -->
+
+    <!-- 策略计算线程工厂 -->
+    <bean id="strategyThreadFactory" class="org.springframework.scheduling.concurrent.CustomizableThreadFactory">
+        <constructor-arg value="strategy-calc-"/>
+    </bean>
+
+    <!-- 策略计算线程池 -->
+    <bean id="strategyExecutorService" class="java.util.concurrent.ThreadPoolExecutor">
+        <constructor-arg value="#{T(java.lang.Runtime).getRuntime().availableProcessors()}"/> <!-- corePoolSize -->
+        <constructor-arg value="#{T(java.lang.Runtime).getRuntime().availableProcessors() * 2}"/> <!-- maxPoolSize -->
+        <constructor-arg value="60"/> <!-- keepAliveTime -->
+        <constructor-arg value="SECONDS"/> <!-- timeUnit -->
+        <constructor-arg>
+            <bean class="java.util.concurrent.LinkedBlockingQueue">
+                <constructor-arg value="1024"/> <!-- capacity -->
+            </bean>
+        </constructor-arg>
+        <constructor-arg ref="strategyThreadFactory"/>
+        <constructor-arg>
+            <bean class="java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy"/>
+        </constructor-arg>
+    </bean>
+
+    <!-- ==================== 辅助路径线程池 ==================== -->
+
+    <!-- IO操作线程工厂 -->
+    <bean id="ioThreadFactory" class="org.springframework.scheduling.concurrent.CustomizableThreadFactory">
+        <constructor-arg value="io-worker-"/>
+    </bean>
+
+    <!-- 定时器线程工厂 -->
+    <bean id="timerThreadFactory" class="org.springframework.scheduling.concurrent.CustomizableThreadFactory">
+        <constructor-arg value="timer-task-"/>
+    </bean>
+
+    <!-- IO操作线程池 -->
+    <bean id="ioExecutorService" class="java.util.concurrent.ThreadPoolExecutor">
+        <constructor-arg value="#{T(java.lang.Runtime).getRuntime().availableProcessors()}"/> <!-- corePoolSize -->
+        <constructor-arg value="2147483647"/> <!-- maxPoolSize (Integer.MAX_VALUE) -->
+        <constructor-arg value="60"/> <!-- keepAliveTime -->
+        <constructor-arg value="SECONDS"/> <!-- timeUnit -->
+        <constructor-arg>
+            <bean class="java.util.concurrent.SynchronousQueue"/>
+        </constructor-arg>
+        <constructor-arg ref="ioThreadFactory"/>
+        <constructor-arg>
+            <bean class="java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy"/>
+        </constructor-arg>
+    </bean>
+
+    <!-- 定时器线程池 -->
+    <bean id="timerExecutorService" class="java.util.concurrent.Executors" factory-method="newScheduledThreadPool">
+        <constructor-arg value="4"/>
+        <constructor-arg ref="timerThreadFactory"/>
+    </bean>
+
+    <!-- 单线程执行器 -->
+    <bean id="singleThreadExecutorService" class="java.util.concurrent.Executors" factory-method="newSingleThreadExecutor">
+        <constructor-arg ref="ioThreadFactory"/>
+    </bean>
+
+    <!-- ==================== 事件处理线程池 ==================== -->
+    <!-- 注意：CrossStrategy中引用了eventExecutorService，但ThreadConfig中没有定义，这里补充一个 -->
+    <bean id="eventExecutorService" class="java.util.concurrent.ThreadPoolExecutor">
+        <constructor-arg value="#{T(java.lang.Runtime).getRuntime().availableProcessors()}"/> <!-- corePoolSize -->
+        <constructor-arg value="#{T(java.lang.Runtime).getRuntime().availableProcessors() * 2}"/> <!-- maxPoolSize -->
+        <constructor-arg value="60"/> <!-- keepAliveTime -->
+        <constructor-arg value="SECONDS"/> <!-- timeUnit -->
+        <constructor-arg>
+            <bean class="java.util.concurrent.LinkedBlockingQueue">
+                <constructor-arg value="1024"/> <!-- capacity -->
+            </bean>
+        </constructor-arg>
+        <constructor-arg ref="ioThreadFactory"/>
+        <constructor-arg>
+            <bean class="java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy"/>
+        </constructor-arg>
+    </bean>
+
+    <!-- ==================== Process - 系统进程管理器 ==================== -->
+    <bean id="process" class="com.tanggo.fund.jnautilustrader.core.Process">
+        <property name="marketDataExecutorService" ref="marketDataExecutorService"/>
+        <property name="tradingExecutorService" ref="tradingExecutorService"/>
+        <property name="strategyExecutorService" ref="strategyExecutorService"/>
+        <property name="strategyConfig" ref="strategyConfig"/>
+    </bean>
+
+</beans>

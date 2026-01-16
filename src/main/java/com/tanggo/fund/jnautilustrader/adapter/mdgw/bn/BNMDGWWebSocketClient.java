@@ -9,7 +9,6 @@ import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
 import com.tanggo.fund.jnautilustrader.core.entity.data.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
@@ -18,14 +17,12 @@ import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
  * 币安WebSocket客户端 - 订阅实时交易数据
  */
-@Component
 public class BNMDGWWebSocketClient implements Actor {
 
     private static final Logger logger = LoggerFactory.getLogger(BNMDGWWebSocketClient.class);
@@ -33,17 +30,36 @@ public class BNMDGWWebSocketClient implements Actor {
     private static final String BINANCE_WS_URL = "wss://stream.binance.com:9443/stream?streams=btcusdt@trade/btcusdt@depth/btcusdt@depthUpdate";
     // 重连间隔（秒）
     private static final int RECONNECT_DELAY = 5;
-    private final BlockingQueueEventRepo<MarketData> mdEventRepo;
-    private final ObjectMapper objectMapper;
-    private final ScheduledExecutorService reconnectScheduler;
+
+    private BlockingQueueEventRepo<MarketData> mdEventRepo;
+    private ObjectMapper objectMapper;
+    private ScheduledExecutorService timerExecutorService;
     private WebSocket webSocket;
     private volatile boolean reconnecting;
 
-    public BNMDGWWebSocketClient(BlockingQueueEventRepo<MarketData> mdEventRepo) {
-        this.mdEventRepo = mdEventRepo;
+    /**
+     * 无参构造函数 - Spring需要
+     */
+    public BNMDGWWebSocketClient() {
         this.objectMapper = new ObjectMapper();
-        this.reconnectScheduler = Executors.newSingleThreadScheduledExecutor();
         this.reconnecting = false;
+    }
+
+    /**
+     * 构造函数 - 用于注入依赖
+     */
+    public BNMDGWWebSocketClient(BlockingQueueEventRepo<MarketData> mdEventRepo) {
+        this();
+        this.mdEventRepo = mdEventRepo;
+    }
+
+    /**
+     * 构造函数 - 包含所有依赖
+     */
+    public BNMDGWWebSocketClient(BlockingQueueEventRepo<MarketData> mdEventRepo,
+                                  ScheduledExecutorService timerExecutorService) {
+        this(mdEventRepo);
+        this.timerExecutorService = timerExecutorService;
     }
 
 
@@ -75,7 +91,10 @@ public class BNMDGWWebSocketClient implements Actor {
      */
 
     private void destroy() {
-        reconnectScheduler.shutdown();
+        // 只关闭自己创建的调度器
+        if (timerExecutorService != null) {
+            timerExecutorService.shutdown();
+        }
         if (webSocket != null) {
             try {
                 webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Shutdown").join();
@@ -96,7 +115,7 @@ public class BNMDGWWebSocketClient implements Actor {
 
         reconnecting = true;
         logger.info("Scheduling reconnection in {} seconds", RECONNECT_DELAY);
-        reconnectScheduler.schedule(() -> {
+        timerExecutorService.schedule(() -> {
             reconnecting = false;
             logger.info("Attempting to reconnect to Binance WebSocket");
             connect();
@@ -104,14 +123,12 @@ public class BNMDGWWebSocketClient implements Actor {
     }
 
     @Override
-    @PostConstruct
     public void start() {
         connect();
 
     }
 
     @Override
-    @PreDestroy
     public void stop() {
         destroy();
 

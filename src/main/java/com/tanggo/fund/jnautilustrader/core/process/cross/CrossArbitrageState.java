@@ -128,35 +128,80 @@ public class CrossArbitrageState {
     private String statusInfo;
 
     /**
+     * 构造函数 - 接受策略参数
+     */
+    public CrossArbitrageState(CrossArbitrageParams params) {
+        this.params = params;
+        this.isRunning = false;
+        this.startTime = 0;
+        this.currentTime = 0;
+        this.binanceBidPrice = 0;
+        this.binanceAskPrice = 0;
+        this.binanceMidPrice = 0;
+        this.bitgetBidPrice = 0;
+        this.bitgetAskPrice = 0;
+        this.bitgetMidPrice = 0;
+        this.lastArbitrageTime = 0;
+        this.arbitrageCount = 0;
+        this.successfulArbitrageCount = 0;
+        this.failedArbitrageCount = 0;
+        this.totalProfit = 0;
+        this.currentPosition = 0;
+        this.maxPosition = 0;
+        this.minPosition = 0;
+        this.avgPosition = 0;
+        this.totalVolume = 0;
+        this.lastSpreadPercentage = 0;
+        this.maxSpreadPercentage = 0;
+        this.avgSpreadPercentage = 0;
+        this.statusInfo = "初始化完成";
+    }
+
+    /**
+     * 无参构造函数 - Spring需要
+     */
+    public CrossArbitrageState() {
+        this.isRunning = false;
+        this.startTime = 0;
+        this.currentTime = 0;
+        this.binanceBidPrice = 0;
+        this.binanceAskPrice = 0;
+        this.binanceMidPrice = 0;
+        this.bitgetBidPrice = 0;
+        this.bitgetAskPrice = 0;
+        this.bitgetMidPrice = 0;
+        this.lastArbitrageTime = 0;
+        this.arbitrageCount = 0;
+        this.successfulArbitrageCount = 0;
+        this.failedArbitrageCount = 0;
+        this.totalProfit = 0;
+        this.currentPosition = 0;
+        this.maxPosition = 0;
+        this.minPosition = 0;
+        this.avgPosition = 0;
+        this.totalVolume = 0;
+        this.lastSpreadPercentage = 0;
+        this.maxSpreadPercentage = 0;
+        this.avgSpreadPercentage = 0;
+        this.statusInfo = "初始化完成";
+    }
+
+    /**
      * 创建初始状态
      */
     public static CrossArbitrageState initialState() {
-        CrossArbitrageState state = new CrossArbitrageState();
-        state.isRunning = false;
-        state.startTime = 0;
-        state.currentTime = 0;
-        state.binanceBidPrice = 0;
-        state.binanceAskPrice = 0;
-        state.binanceMidPrice = 0;
-        state.bitgetBidPrice = 0;
-        state.bitgetAskPrice = 0;
-        state.bitgetMidPrice = 0;
-        state.lastArbitrageTime = 0;
-        state.arbitrageCount = 0;
-        state.successfulArbitrageCount = 0;
-        state.failedArbitrageCount = 0;
-        state.totalProfit = 0;
-        state.currentPosition = 0;
-        state.maxPosition = 0;
-        state.minPosition = 0;
-        state.avgPosition = 0;
-        state.totalVolume = 0;
-        state.lastSpreadPercentage = 0;
-        state.maxSpreadPercentage = 0;
-        state.avgSpreadPercentage = 0;
-        state.statusInfo = "初始化完成";
-        return state;
+        return new CrossArbitrageState();
     }
+
+    /**
+     * 设置策略参数
+     */
+    public void setParams(CrossArbitrageParams params) {
+        this.params = params;
+    }
+
+    // 策略参数
+    private CrossArbitrageParams params;
 
     /**
      * 启动策略状态
