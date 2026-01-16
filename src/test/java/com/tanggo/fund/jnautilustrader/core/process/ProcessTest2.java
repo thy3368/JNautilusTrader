@@ -4,6 +4,7 @@ import com.tanggo.fund.jnautilustrader.adapter.event_repo.BlockingQueueEventRepo
 import com.tanggo.fund.jnautilustrader.adapter.mdgw.bn.BNMDGWWebSocketClient;
 import com.tanggo.fund.jnautilustrader.core.entity.Actor;
 import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
+import com.tanggo.fund.jnautilustrader.core.util.ThreadLogger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,6 +13,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadInfo;
+import java.lang.management.ThreadMXBean;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -42,7 +47,8 @@ class ProcessTest2 {
 
     @BeforeEach
     void setUp() {
-        logger.info("=== 初始化测试环境 ===");
+        ThreadLogger.info(logger, "=== 初始化测试环境 ===");
+
 
         // 创建线程池
         executorService = Executors.newFixedThreadPool(2);
@@ -58,7 +64,8 @@ class ProcessTest2 {
 
     @AfterEach
     void tearDown() {
-        logger.info("=== 清理测试环境 ===");
+
+        ThreadLogger.info(logger, "=== 清理测试环境 ===");
 
         // 停止运行
         running.set(false);
@@ -81,7 +88,7 @@ class ProcessTest2 {
             }
         }
 
-        logger.info("测试环境清理完成，总共接收事件数: {}", eventCount.get());
+        ThreadLogger.info(logger, "测试环境清理完成，总共接收事件数: {}", eventCount.get());
     }
 
     /**
@@ -95,36 +102,145 @@ class ProcessTest2 {
      */
     @Test
     void testWebSocketClientInSeparateThread() throws InterruptedException {
-        logger.info("=== 开始测试 WebSocket 客户端多线程运行 ===");
+        ThreadLogger.info(logger, "=== 开始测试 WebSocket 客户端多线程运行 ===");
 
         // 启动 WebSocket 客户端连接
-        logger.info("正在启动 WebSocket 客户端...");
+        ThreadLogger.info(logger, "正在启动 WebSocket 客户端...");
         bnmdgwWebSocketClient.start();
 
         // 等待连接建立
         Thread.sleep(2000);
 
-//        if (bnmdgwWebSocketClient.isConnected()) {
-//            logger.info("WebSocket 客户端连接成功");
-//        } else {
-//            logger.warn("WebSocket 客户端连接失败或正在重连");
-//        }
 
         // 启动市场数据事件消费者线程，打印接收到的行情
         executorService.submit(() -> {
-            logger.info("市场数据消费者线程已启动");
+            ThreadLogger.info(logger, "市场数据消费者线程已启动");
+
             while (running.get()) {
                 var event = mdEventRepo.receive();
                 if (event != null) {
                     eventCount.incrementAndGet();
-                    logger.info("收到市场数据事件: type={}, payload={}", event.type, event.payload);
+                    ThreadLogger.info(logger, "收到市场数据事件: type={}, payload={}", event.type, event.payload);
+
+
                 }
             }
         });
 
+        // 让测试一直运行，直到手动中断
+        ThreadLogger.info(logger, "测试正在运行...按 Ctrl+C 停止");
+        // 打印线程树
+//        printThreadTree();
+        Thread.currentThread().join();  // 永远等待，直到线程被中断
+    }
 
-        // 等待消费者线程处理完剩余事件
-        Thread.sleep(20000);
+    /**
+     * 打印线程树结构（从 main 线程开始）
+     */
+    private void printThreadTree() {
+        ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();
+        ThreadInfo[] allThreads = threadMXBean.dumpAllThreads(false, false);
+
+        // 构建线程ID到线程信息的映射
+        Map<Long, ThreadInfo> threadMap = new HashMap<>();
+        for (ThreadInfo info : allThreads) {
+            threadMap.put(info.getThreadId(), info);
+        }
+
+        // 尝试根据线程组和名称建立关系
+        // 1. 首先找到 main 线程
+        ThreadInfo mainThread = null;
+        for (ThreadInfo info : allThreads) {
+            if ("main".equals(info.getThreadName())) {
+                mainThread = info;
+                break;
+            }
+        }
+
+        if (mainThread == null) {
+            ThreadLogger.warn(logger, "未找到 main 线程");
+            return;
+        }
+
+        ThreadLogger.info(logger, "=== 线程树结构 (根线程: main) ===");
+        printThreadTreeNode(mainThread, threadMap, 0);
+
+        // 打印未关联到 main 线程的其他线程
+        Set<Long> printedThreadIds = new HashSet<>();
+        collectPrintedThreadIds(mainThread, threadMap, printedThreadIds);
+
+        List<ThreadInfo> orphanThreads = new ArrayList<>();
+        for (ThreadInfo info : allThreads) {
+            if (!printedThreadIds.contains(info.getThreadId()) && !"main".equals(info.getThreadName())) {
+                orphanThreads.add(info);
+            }
+        }
+
+        if (!orphanThreads.isEmpty()) {
+            ThreadLogger.info(logger, "=== 孤立线程 ===");
+            for (ThreadInfo info : orphanThreads) {
+                printThreadTreeNode(info, threadMap, 0);
+            }
+        }
+    }
+
+    /**
+     * 递归打印线程树节点
+     */
+    private void printThreadTreeNode(ThreadInfo info, Map<Long, ThreadInfo> threadMap, int depth) {
+        String indent = "  ".repeat(depth);
+        String stateStr = info.getThreadState().toString();
+        String priorityStr = "P" + info.getPriority();
+        String daemonStr = info.isDaemon() ? "[Daemon]" : "";
+
+        ThreadLogger.info(logger, "{}[{}] {} ({}) {} {}",
+                indent,
+                info.getThreadId(),
+                info.getThreadName(),
+                stateStr,
+                priorityStr,
+                daemonStr);
+
+        // 递归打印子线程（这里我们基于线程组和名称关联）
+        // 简单的启发式规则：如果线程名称包含父线程的名称特征，或者线程组相同
+        for (ThreadInfo childInfo : threadMap.values()) {
+            if (childInfo.getThreadId() != info.getThreadId()) {
+                boolean isChild = isChildThread(info, childInfo);
+                if (isChild) {
+                    printThreadTreeNode(childInfo, threadMap, depth + 1);
+                }
+            }
+        }
+    }
+
+    /**
+     * 判断是否为子线程的简单启发式方法
+     */
+    private boolean isChildThread(ThreadInfo parentInfo, ThreadInfo childInfo) {
+        // 检查线程组是否相同
+        ThreadGroup parentGroup = Thread.currentThread().getThreadGroup();
+        ThreadGroup childGroup = Thread.currentThread().getThreadGroup();
+        if (parentGroup != null && childGroup != null && parentGroup == childGroup) {
+            // 检查子线程是否可能是父线程创建的
+            // 例如：pool-1-thread-1 是 Executors.newFixedThreadPool 创建的
+            if (childInfo.getThreadName().startsWith("pool-") ||
+                childInfo.getThreadName().startsWith("BN-MDGW-WS-")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 收集已打印的线程ID
+     */
+    private void collectPrintedThreadIds(ThreadInfo info, Map<Long, ThreadInfo> threadMap, Set<Long> printedIds) {
+        printedIds.add(info.getThreadId());
+        for (ThreadInfo childInfo : threadMap.values()) {
+            if (childInfo.getThreadId() != info.getThreadId() && isChildThread(info, childInfo)) {
+                collectPrintedThreadIds(childInfo, threadMap, printedIds);
+            }
+        }
     }
 
 
