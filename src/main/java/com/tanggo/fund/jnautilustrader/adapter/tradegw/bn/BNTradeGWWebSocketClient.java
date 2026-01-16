@@ -50,7 +50,7 @@ public class BNTradeGWWebSocketClient implements Actor {
     public BNTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo, BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo) {
         this.marketDataBlockingQueueEventRepo = marketDataBlockingQueueEventRepo;
         this.tradeCmdEventRepo = tradeCmdEventRepo;
-        this.objectMapper = objectMapper;
+        this.objectMapper = new ObjectMapper();
         this.httpClient = HttpClient.newHttpClient();
     }
 

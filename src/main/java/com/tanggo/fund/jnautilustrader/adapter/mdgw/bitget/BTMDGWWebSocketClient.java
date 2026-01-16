@@ -23,14 +23,14 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 币安WebSocket客户端 - 订阅实时交易数据
+ * Bitget WebSocket客户端 - 订阅实时交易数据
  */
 @Component
 public class BTMDGWWebSocketClient implements Actor {
 
     private static final Logger logger = LoggerFactory.getLogger(BTMDGWWebSocketClient.class);
-    // 币安WebSocket API地址 - 同时订阅交易、订单簿深度和增量更新
-    private static final String BINANCE_WS_URL = "wss://stream.binance.com:9443/stream?streams=btcusdt@trade/btcusdt@depth/btcusdt@depthUpdate";
+    // Bitget WebSocket API地址 - 同时订阅交易、订单簿深度和增量更新
+    private static final String BITGET_WS_URL = "wss://ws.bitget.com/v2/ws/public";
     // 重连间隔（秒）
     private static final int RECONNECT_DELAY = 5;
     private final BlockingQueueEventRepo<MarketData> mdEventRepo;
@@ -57,16 +57,47 @@ public class BTMDGWWebSocketClient implements Actor {
         }
 
         try {
-            URI uri = new URI(BINANCE_WS_URL);
+            URI uri = new URI(BITGET_WS_URL);
             HttpClient client = HttpClient.newBuilder().connectTimeout(java.time.Duration.ofSeconds(10)).build();
             webSocket = client.newWebSocketBuilder().connectTimeout(java.time.Duration.ofSeconds(10)).buildAsync(uri, new WebSocketListener()).join();
 
-            logger.info("Connected to Binance WebSocket: {}", BINANCE_WS_URL);
+            logger.info("Connected to Bitget WebSocket: {}", BITGET_WS_URL);
+
+            // 订阅BTC/USDT现货的交易和订单簿深度数据
+            subscribeToMarkets();
         } catch (URISyntaxException e) {
-            logger.error("Invalid Binance WebSocket URL: {}", e.getMessage(), e);
+            logger.error("Invalid Bitget WebSocket URL: {}", e.getMessage(), e);
         } catch (Exception e) {
-            logger.error("Failed to connect to Binance WebSocket: {}", e.getMessage(), e);
+            logger.error("Failed to connect to Bitget WebSocket: {}", e.getMessage(), e);
             scheduleReconnect();
+        }
+    }
+
+    /**
+     * 订阅市场数据
+     */
+    private void subscribeToMarkets() {
+        try {
+            String subscribeMsg = "{\n" +
+                    "    \"op\": \"subscribe\",\n" +
+                    "    \"args\": [\n" +
+                    "        {\n" +
+                    "            \"instType\": \"SPOT\",\n" +
+                    "            \"instId\": \"BTCUSDT\",\n" +
+                    "            \"channel\": \"trade\"\n" +
+                    "        },\n" +
+                    "        {\n" +
+                    "            \"instType\": \"SPOT\",\n" +
+                    "            \"instId\": \"BTCUSDT\",\n" +
+                    "            \"channel\": \"books\",\n" +
+                    "            \"sz\": \"10\"\n" +
+                    "        }\n" +
+                    "    ]\n" +
+                    "}";
+            webSocket.sendText(subscribeMsg, true);
+            logger.info("Subscribed to Bitget market data channels");
+        } catch (Exception e) {
+            logger.error("Failed to subscribe to Bitget market data: {}", e.getMessage(), e);
         }
     }
 
@@ -79,9 +110,9 @@ public class BTMDGWWebSocketClient implements Actor {
         if (webSocket != null) {
             try {
                 webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Shutdown").join();
-                logger.info("Binance WebSocket connection closed");
+                logger.info("Bitget WebSocket connection closed");
             } catch (Exception e) {
-                logger.error("Failed to close Binance WebSocket connection: {}", e.getMessage(), e);
+                logger.error("Failed to close Bitget WebSocket connection: {}", e.getMessage(), e);
             }
         }
     }
@@ -98,7 +129,7 @@ public class BTMDGWWebSocketClient implements Actor {
         logger.info("Scheduling reconnection in {} seconds", RECONNECT_DELAY);
         reconnectScheduler.schedule(() -> {
             reconnecting = false;
-            logger.info("Attempting to reconnect to Binance WebSocket");
+            logger.info("Attempting to reconnect to Bitget WebSocket");
             connect();
         }, RECONNECT_DELAY, TimeUnit.SECONDS);
     }
@@ -118,74 +149,42 @@ public class BTMDGWWebSocketClient implements Actor {
     }
 
     /**
-     * 解析币安WebSocket返回的各种类型的消息
+     * 解析Bitget WebSocket返回的各种类型的消息
      */
     private Object parseMessage(String message) throws Exception {
-        // 首先解析根节点
         JsonNode rootNode = objectMapper.readTree(message);
 
-        // 检查是否是组合流格式（包含stream和data字段）
-        if (rootNode.has("stream") && rootNode.has("data")) {
-            JsonNode dataNode = rootNode.path("data");
-            String eventType = dataNode.path("e").asText();
-
-            switch (eventType) {
-                case "trade":
-                    return parseTradeTick(dataNode.toString());
-                case "aggTrade":
-                    return parseAggregateTradeTick(dataNode.toString());
-                case "depth":
-                    return parseOrderBookDepth(dataNode.toString());
-                case "depthUpdate":
-                    return parseOrderBookDelta(dataNode.toString());
-                case "kline":
-                    return parseBar(dataNode.toString());
-                case "miniTicker":
-                case "ticker":
-                    return parseQuoteTick(dataNode.toString());
-                case "markPriceUpdate":
-                    return parseMarkPriceUpdate(dataNode.toString());
-                case "indexPriceUpdate":
-                    return parseIndexPriceUpdate(dataNode.toString());
-                case "fundingRate":
-                    return parseFundingRateUpdate(dataNode.toString());
-                case "bookTicker":
-                    return parseBookTicker(dataNode.toString());
-                default:
-                    logger.debug("Received unsupported event type: {}", eventType);
-                    return null;
+        // 处理订阅确认和心跳
+        if (rootNode.has("event")) {
+            String event = rootNode.path("event").asText();
+            if ("subscribe".equals(event)) {
+                logger.debug("Subscription confirmed: {}", message);
+                return null;
+            } else if ("pong".equals(event)) {
+                logger.debug("Received pong from Bitget");
+                return null;
             }
-        } else {
-            // 单流格式
-            String eventType = rootNode.path("e").asText();
+        }
 
-            switch (eventType) {
+        // 处理业务数据
+        if (rootNode.has("arg") && rootNode.has("data")) {
+            JsonNode argNode = rootNode.path("arg");
+            String channel = argNode.path("channel").asText();
+            JsonNode dataNode = rootNode.path("data");
+
+            switch (channel) {
                 case "trade":
-                    return parseTradeTick(message);
-                case "aggTrade":
-                    return parseAggregateTradeTick(message);
-                case "depth":
-                    return parseOrderBookDepth(message);
-                case "depthUpdate":
-                    return parseOrderBookDelta(message);
-                case "kline":
-                    return parseBar(message);
-                case "miniTicker":
-                case "ticker":
-                    return parseQuoteTick(message);
-                case "markPriceUpdate":
-                    return parseMarkPriceUpdate(message);
-                case "indexPriceUpdate":
-                    return parseIndexPriceUpdate(message);
-                case "fundingRate":
-                    return parseFundingRateUpdate(message);
-                case "bookTicker":
-                    return parseBookTicker(message);
+                    return parseTradeTick(dataNode);
+                case "books":
+                    return parseOrderBookDepth(dataNode);
                 default:
-                    logger.debug("Received unsupported event type: {}", eventType);
+                    logger.debug("Received unsupported channel: {}", channel);
                     return null;
             }
         }
+
+        logger.debug("Received unrecognized message format: {}", message);
+        return null;
     }
 
     /**
@@ -193,93 +192,117 @@ public class BTMDGWWebSocketClient implements Actor {
      */
     private String determineEventType(Object message) {
         if (message instanceof TradeTick) {
-            return "BINANCE_TRADE_TICK";
+            return "BITGET_TRADE_TICK";
         } else if (message instanceof QuoteTick) {
-            return "BINANCE_QUOTE_TICK";
+            return "BITGET_QUOTE_TICK";
         } else if (message instanceof Bar) {
-            return "BINANCE_BAR";
+            return "BITGET_BAR";
         } else if (message instanceof OrderBookDepth10) {
-            return "BINANCE_ORDER_BOOK_DEPTH";
+            return "BITGET_ORDER_BOOK_DEPTH";
         } else if (message instanceof OrderBookDeltas || message instanceof OrderBookDelta) {
-            return "BINANCE_ORDER_BOOK_DELTA";
+            return "BITGET_ORDER_BOOK_DELTA";
         } else if (message instanceof MarkPriceUpdate) {
-            return "BINANCE_MARK_PRICE_UPDATE";
+            return "BITGET_MARK_PRICE_UPDATE";
         } else if (message instanceof IndexPriceUpdate) {
-            return "BINANCE_INDEX_PRICE_UPDATE";
+            return "BITGET_INDEX_PRICE_UPDATE";
         } else if (message instanceof FundingRateUpdate) {
-            return "BINANCE_FUNDING_RATE_UPDATE";
+            return "BITGET_FUNDING_RATE_UPDATE";
         }
-        return "BINANCE_UNKNOWN";
+        return "BITGET_UNKNOWN";
     }
 
     /**
-     * 解析币安WebSocket返回的交易数据
+     * 解析Bitget WebSocket返回的交易数据
      */
-    private TradeTick parseTradeTick(String message) throws Exception {
-        return objectMapper.readValue(message, TradeTick.class);
+    private TradeTick parseTradeTick(JsonNode dataNode) {
+        TradeTick tick = new TradeTick();
+
+        if (dataNode.isArray() && dataNode.size() > 0) {
+            JsonNode tradeNode = dataNode.get(0);
+            tick.setTradeId(tradeNode.path("tradeId").asText());
+            tick.setSymbol("BTCUSDT");
+            tick.setPrice(tradeNode.path("px").asDouble());
+            tick.setQuantity(tradeNode.path("sz").asDouble());
+            tick.setTimestampMs(tradeNode.path("ts").asLong());
+            tick.setBuyerMaker("buy".equals(tradeNode.path("side").asText()));
+        }
+
+        return tick;
     }
 
     /**
-     * 解析币安WebSocket返回的聚合交易数据
+     * 解析Bitget WebSocket返回的订单簿深度数据
      */
-    private TradeTick parseAggregateTradeTick(String message) throws Exception {
-        return objectMapper.readValue(message, TradeTick.class);
+    private OrderBookDepth10 parseOrderBookDepth(JsonNode dataNode) {
+        OrderBookDepth10 orderBook = new OrderBookDepth10();
+        orderBook.setSymbol("BTCUSDT");
+
+        if (dataNode.isArray() && dataNode.size() > 0) {
+            JsonNode bookNode = dataNode.get(0);
+
+            // 解析买盘
+            JsonNode bidsNode = bookNode.path("bids");
+            orderBook.setBids(parseBookEntries(bidsNode));
+
+            // 解析卖盘
+            JsonNode asksNode = bookNode.path("asks");
+            orderBook.setAsks(parseBookEntries(asksNode));
+        }
+
+        return orderBook;
     }
 
     /**
-     * 解析币安WebSocket返回的订单簿深度数据
+     * 解析订单簿条目
      */
-    private OrderBookDepth10 parseOrderBookDepth(String message) throws Exception {
-        return objectMapper.readValue(message, OrderBookDepth10.class);
+    private java.util.List<java.util.List<String>> parseBookEntries(JsonNode entriesNode) {
+        java.util.List<java.util.List<String>> entries = new java.util.ArrayList<>();
+
+        if (entriesNode.isArray()) {
+            for (JsonNode entryNode : entriesNode) {
+                java.util.List<String> entry = new java.util.ArrayList<>();
+                entry.add(entryNode.path("px").asText());
+                entry.add(entryNode.path("sz").asText());
+                entries.add(entry);
+            }
+        }
+
+        return entries;
     }
 
     /**
-     * 解析币安WebSocket返回的订单簿增量更新数据
-     */
-    private OrderBookDeltas parseOrderBookDelta(String message) throws Exception {
-        return objectMapper.readValue(message, OrderBookDeltas.class);
-    }
-
-    /**
-     * 解析币安WebSocket返回的K线数据
+     * 解析Bitget WebSocket返回的K线数据
      */
     private Bar parseBar(String message) throws Exception {
         return objectMapper.readValue(message, Bar.class);
     }
 
     /**
-     * 解析币安WebSocket返回的报价数据
+     * 解析Bitget WebSocket返回的报价数据
      */
     private QuoteTick parseQuoteTick(String message) throws Exception {
         return objectMapper.readValue(message, QuoteTick.class);
     }
 
     /**
-     * 解析币安WebSocket返回的标记价格更新数据
+     * 解析Bitget WebSocket返回的标记价格更新数据
      */
     private MarkPriceUpdate parseMarkPriceUpdate(String message) throws Exception {
         return objectMapper.readValue(message, MarkPriceUpdate.class);
     }
 
     /**
-     * 解析币安WebSocket返回的指数价格更新数据
+     * 解析Bitget WebSocket返回的指数价格更新数据
      */
     private IndexPriceUpdate parseIndexPriceUpdate(String message) throws Exception {
         return objectMapper.readValue(message, IndexPriceUpdate.class);
     }
 
     /**
-     * 解析币安WebSocket返回的资金费率更新数据
+     * 解析Bitget WebSocket返回的资金费率更新数据
      */
     private FundingRateUpdate parseFundingRateUpdate(String message) throws Exception {
         return objectMapper.readValue(message, FundingRateUpdate.class);
-    }
-
-    /**
-     * 解析币安WebSocket返回的最优买卖盘数据
-     */
-    private QuoteTick parseBookTicker(String message) throws Exception {
-        return objectMapper.readValue(message, QuoteTick.class);
     }
 
     /**
@@ -298,14 +321,14 @@ public class BTMDGWWebSocketClient implements Actor {
 
         @Override
         public void onOpen(WebSocket webSocket) {
-            logger.info("Binance WebSocket connection opened");
+            logger.info("Bitget WebSocket connection opened");
             WebSocket.Listener.super.onOpen(webSocket);
         }
 
         @Override
         public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
             String message = data.toString();
-            logger.debug("Received Binance WebSocket message fragment: {}", message);
+            logger.debug("Received Bitget WebSocket message fragment: {}", message);
 
             try {
                 // 累积消息片段
@@ -314,9 +337,9 @@ public class BTMDGWWebSocketClient implements Actor {
                 // 如果是完整消息，处理它
                 if (last) {
                     String completeMessage = messageBuffer.toString();
-                    logger.debug("Received complete Binance WebSocket message: {}", completeMessage);
+                    logger.debug("Received complete Bitget WebSocket message: {}", completeMessage);
 
-                    // 解析币安WebSocket消息
+                    // 解析Bitget WebSocket消息
                     Object parsedMessage = parseMessage(completeMessage);
                     if (parsedMessage != null) {
                         // 创建MarketData实例并发送到仓储
@@ -332,7 +355,7 @@ public class BTMDGWWebSocketClient implements Actor {
                     messageBuffer.setLength(0);
                 }
             } catch (Exception e) {
-                logger.error("Failed to process Binance WebSocket message: {}", e.getMessage(), e);
+                logger.error("Failed to process Bitget WebSocket message: {}", e.getMessage(), e);
                 // 清空缓冲区以防止后续消息解析错误
                 messageBuffer.setLength(0);
             }
@@ -342,7 +365,7 @@ public class BTMDGWWebSocketClient implements Actor {
 
         @Override
         public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-            logger.info("Binance WebSocket connection closed: status={}, reason={}", statusCode, reason);
+            logger.info("Bitget WebSocket connection closed: status={}, reason={}", statusCode, reason);
             BTMDGWWebSocketClient.this.webSocket = null;
             // 自动重连
             scheduleReconnect();
@@ -351,7 +374,7 @@ public class BTMDGWWebSocketClient implements Actor {
 
         @Override
         public void onError(WebSocket webSocket, Throwable error) {
-            logger.error("Binance WebSocket error: {}", error.getMessage(), error);
+            logger.error("Bitget WebSocket error: {}", error.getMessage(), error);
         }
     }
 }

@@ -141,4 +141,18 @@ public class PlaceOrder {
     public static PlaceOrder createMarketSellOrder(String symbol, double quantity) {
         return new PlaceOrder(symbol, "SELL", "MARKET", null, quantity, 0, null);
     }
+
+    /**
+     * 判断是否为买入订单
+     */
+    public boolean isBuy() {
+        return "BUY".equals(this.side);
+    }
+
+    /**
+     * 判断是否为卖出订单
+     */
+    public boolean isSell() {
+        return "SELL".equals(this.side);
+    }
 }

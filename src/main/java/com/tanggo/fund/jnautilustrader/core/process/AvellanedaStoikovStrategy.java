@@ -51,6 +51,15 @@ public class AvellanedaStoikovStrategy implements Actor {
     private Thread eventThread;
     private Thread strategyThread;
 
+    // 默认构造函数，用于 Spring 自动装配
+    public AvellanedaStoikovStrategy() {
+        this.params = AvellanedaStoikovParams.defaultParams();
+        this.state = AvellanedaStoikovState.initialState();
+        this.marketDataRepo = null;
+        this.tradeCmdRepo = null;
+        this.eventHandlerRepo = null;
+    }
+
     public AvellanedaStoikovStrategy(EventRepo<MarketData> marketDataRepo, EventRepo<TradeCmd> tradeCmdRepo, EventHandlerRepo<MarketData> eventHandlerRepo) {
         this(marketDataRepo, tradeCmdRepo, eventHandlerRepo, AvellanedaStoikovParams.defaultParams());
     }
@@ -61,8 +70,6 @@ public class AvellanedaStoikovStrategy implements Actor {
         this.eventHandlerRepo = eventHandlerRepo;
         this.params = params;
         this.state = AvellanedaStoikovState.initialState();
-
-
     }
 
 

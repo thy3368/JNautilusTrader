@@ -10,4 +10,11 @@ public interface EventHandlerRepo<T> {
      * @return 对应的事件处理器
      */
     EventHandler<T> queryBy(String type);
+
+    /**
+     * 添加事件处理器
+     * @param type 事件类型
+     * @param handler 事件处理器
+     */
+    void addHandler(String type, EventHandler<T> handler);
 }

@@ -26,8 +26,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 币安WebSocket交易网关客户端
- * 负责连接币安交易WebSocket API，发送交易命令并处理响应
+ * Bitget WebSocket交易网关客户端
+ * 负责连接Bitget交易WebSocket API，发送交易命令并处理响应
  */
 @Component
 public class BTTradeGWWebSocketClient implements Actor {
@@ -36,20 +36,20 @@ public class BTTradeGWWebSocketClient implements Actor {
 
     private final BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo;
 
-
     private final BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo;
     private final ObjectMapper objectMapper;
     private final ScheduledExecutorService reconnectExecutor = Executors.newSingleThreadScheduledExecutor();
     private final HttpClient httpClient;
-    @Value("${binance.websocket.trade.url: wss://stream.binance.com:9443/ws}")
+    @Value("${bitget.websocket.trade.url: wss://ws.bitget.com/v2/ws/private}")
     private String baseWebSocketUrl;
-    private String listenKey; // 币安WebSocket用户数据流监听密钥
+    private String listenKey; // Bitget WebSocket用户数据流监听密钥
     private WebSocket webSocket;
     private volatile boolean connected = false;
 
     public BTTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo, BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo) {
         this.marketDataBlockingQueueEventRepo = marketDataBlockingQueueEventRepo;
         this.tradeCmdEventRepo = tradeCmdEventRepo;
+        this.objectMapper = new ObjectMapper();
         this.httpClient = HttpClient.newHttpClient();
     }
 
@@ -58,40 +58,64 @@ public class BTTradeGWWebSocketClient implements Actor {
      */
     @PostConstruct
     public void init() {
-        logger.info("初始化币安交易WebSocket客户端");
+        logger.info("初始化Bitget交易WebSocket客户端");
         connect();
         startCommandProcessing();
     }
 
     /**
-     * 连接到币安交易WebSocket
+     * 连接到Bitget交易WebSocket
      */
     private void connect() {
         try {
             // 首先获取监听密钥（需要通过REST API获取）
-            // 这里简化处理，实际应该调用币安API获取listenKey
             listenKey = getListenKey();
 
-            String tradeWebSocketUrl = baseWebSocketUrl + "/" + listenKey;
-            logger.info("连接到币安交易WebSocket: {}", tradeWebSocketUrl);
+            String tradeWebSocketUrl = baseWebSocketUrl;
+            logger.info("连接到Bitget交易WebSocket: {}", tradeWebSocketUrl);
 
             webSocket = httpClient.newWebSocketBuilder().buildAsync(URI.create(tradeWebSocketUrl), new TradeWebSocketListener()).get();
 
             connected = true;
-            logger.info("币安交易WebSocket连接成功");
+            logger.info("Bitget交易WebSocket连接成功");
+
+            // 认证（需要发送API密钥信息）
+            authenticate();
         } catch (Exception e) {
-            logger.error("连接币安交易WebSocket失败: {}", e.getMessage(), e);
+            logger.error("连接Bitget交易WebSocket失败: {}", e.getMessage(), e);
             scheduleReconnect();
         }
     }
 
     /**
-     * 获取币安WebSocket监听密钥（简化实现）
+     * 获取Bitget WebSocket监听密钥（简化实现）
      */
     private String getListenKey() {
-        // 实际应该通过币安REST API获取
-        // POST /api/v3/userDataStream
+        // 实际应该通过Bitget REST API获取
+        // POST /api/v2/user/listenKey
         return "mock_listen_key";
+    }
+
+    /**
+     * 认证WebSocket连接
+     */
+    private void authenticate() {
+        try {
+            String authMsg = "{\n" +
+                    "    \"op\": \"auth\",\n" +
+                    "    \"args\": {\n" +
+                    "        \"apiKey\": \"your_api_key\",\n" +
+                    "        \"passphrase\": \"your_passphrase\",\n" +
+                    "        \"timestamp\": \"" + System.currentTimeMillis() + "\",\n" +
+                    "        \"sign\": \"your_signature\"\n" +
+                    "    }\n" +
+                    "}";
+            webSocket.sendText(authMsg, true);
+            logger.info("Sent authentication message to Bitget");
+        } catch (Exception e) {
+            logger.error("Failed to authenticate Bitget WebSocket: {}", e.getMessage(), e);
+            handleConnectionError();
+        }
     }
 
     /**
@@ -172,8 +196,8 @@ public class BTTradeGWWebSocketClient implements Actor {
      */
     private void sendOrderCommand(PlaceOrder placeOrder) {
         try {
-            // 转换PlaceOrder到币安API格式
-            String orderJson = convertToBinanceOrderFormat(placeOrder);
+            // 转换PlaceOrder到Bitget API格式
+            String orderJson = convertToBitgetOrderFormat(placeOrder);
             logger.debug("发送交易命令: {}", orderJson);
 
             webSocket.sendText(orderJson, true);
@@ -184,10 +208,26 @@ public class BTTradeGWWebSocketClient implements Actor {
     }
 
     /**
-     * 转换PlaceOrder到币安API格式
+     * 转换PlaceOrder到Bitget API格式
      */
-    private String convertToBinanceOrderFormat(PlaceOrder placeOrder) throws JsonProcessingException {
-        return objectMapper.writeValueAsString(placeOrder);
+    private String convertToBitgetOrderFormat(PlaceOrder placeOrder) throws JsonProcessingException {
+        String side = placeOrder.isBuy() ? "buy" : "sell";
+        String orderType = "limit";
+
+        return "{\n" +
+                "    \"op\": \"order\",\n" +
+                "    \"args\": [\n" +
+                "        {\n" +
+                "            \"instType\": \"SPOT\",\n" +
+                "            \"instId\": \"BTCUSDT\",\n" +
+                "            \"side\": \"" + side + "\",\n" +
+                "            \"ordType\": \"" + orderType + "\",\n" +
+                "            \"px\": \"" + placeOrder.getPrice() + "\",\n" +
+                "            \"sz\": \"" + placeOrder.getQuantity() + "\",\n" +
+                "            \"timeInForce\": \"GTC\"\n" +
+                "        }\n" +
+                "    ]\n" +
+                "}";
     }
 
     /**
@@ -229,7 +269,7 @@ public class BTTradeGWWebSocketClient implements Actor {
      */
     @PreDestroy
     public void destroy() {
-        logger.info("正在关闭币安交易WebSocket客户端");
+        logger.info("正在关闭Bitget交易WebSocket客户端");
         connected = false;
         closeWebSocket();
         reconnectExecutor.shutdown();
@@ -241,7 +281,7 @@ public class BTTradeGWWebSocketClient implements Actor {
             reconnectExecutor.shutdownNow();
             Thread.currentThread().interrupt();
         }
-        logger.info("币安交易WebSocket客户端已关闭");
+        logger.info("Bitget交易WebSocket客户端已关闭");
     }
 
     /**
@@ -250,20 +290,16 @@ public class BTTradeGWWebSocketClient implements Actor {
     private void handleTradeResponse(String responseJson) {
         try {
             JsonNode rootNode = objectMapper.readTree(responseJson);
-            String eventType = rootNode.path("e").asText();
+            String op = rootNode.path("op").asText();
 
-            switch (eventType) {
-                case "executionReport":
-                    handleExecutionReport(rootNode);
-                    break;
-                case "outboundAccountPosition":
-                    handleAccountPosition(rootNode);
-                    break;
-                case "balanceUpdate":
-                    handleBalanceUpdate(rootNode);
-                    break;
-                default:
-                    logger.debug("未知的交易事件类型: {}", eventType);
+            if ("auth".equals(op)) {
+                handleAuthResponse(rootNode);
+            } else if ("order".equals(op)) {
+                handleOrderResponse(rootNode);
+            } else if ("account".equals(op)) {
+                handleAccountResponse(rootNode);
+            } else {
+                logger.debug("未知的操作类型: {}", op);
             }
         } catch (Exception e) {
             logger.error("解析交易响应失败: {}", e.getMessage(), e);
@@ -271,52 +307,63 @@ public class BTTradeGWWebSocketClient implements Actor {
     }
 
     /**
-     * 处理订单执行报告
+     * 处理认证响应
      */
-    private void handleExecutionReport(JsonNode report) {
-        try {
-            // 解析执行报告并转换为TradeTick
-            TradeTick tradeTick = parseExecutionReportToTradeTick(report);
-            if (tradeTick != null) {
-                Event<TradeTick> event = new Event<>();
-                event.setType("executionReport");
-                event.setPayload(tradeTick);
-                Event<MarketData> marketEvent = new Event<>();
-                marketEvent.setType("executionReport");
-                marketEvent.setPayload(MarketData.createWithData(tradeTick));
-                marketDataBlockingQueueEventRepo.send(marketEvent);
-            }
-        } catch (Exception e) {
-            logger.error("解析执行报告失败: {}", e.getMessage(), e);
+    private void handleAuthResponse(JsonNode rootNode) {
+        JsonNode codeNode = rootNode.path("code");
+        if (codeNode.asInt() == 0) {
+            logger.info("Bitget WebSocket认证成功");
+        } else {
+            String msg = rootNode.path("msg").asText();
+            logger.error("Bitget WebSocket认证失败: {}", msg);
+            handleConnectionError();
         }
     }
 
     /**
-     * 解析执行报告到TradeTick
+     * 处理订单响应
      */
-    private TradeTick parseExecutionReportToTradeTick(JsonNode report) {
+    private void handleOrderResponse(JsonNode rootNode) {
+        JsonNode codeNode = rootNode.path("code");
+        if (codeNode.asInt() == 0) {
+            logger.info("订单发送成功");
+            // 解析订单信息并创建TradeTick事件
+            JsonNode dataNode = rootNode.path("data");
+            if (dataNode.isArray() && dataNode.size() > 0) {
+                JsonNode orderNode = dataNode.get(0);
+                TradeTick tradeTick = parseOrderToTradeTick(orderNode);
+                if (tradeTick != null) {
+                    Event<MarketData> marketEvent = new Event<>();
+                    marketEvent.setType("BITGET_EXECUTION_REPORT");
+                    marketEvent.setPayload(MarketData.createWithData(tradeTick));
+                    marketDataBlockingQueueEventRepo.send(marketEvent);
+                }
+            }
+        } else {
+            String msg = rootNode.path("msg").asText();
+            logger.error("订单发送失败: {}", msg);
+        }
+    }
+
+    /**
+     * 解析订单信息到TradeTick
+     */
+    private TradeTick parseOrderToTradeTick(JsonNode orderNode) {
         TradeTick tick = new TradeTick();
-        tick.setTradeId(report.path("t").asText());
-        tick.setSymbol(report.path("s").asText());
-        tick.setPrice(report.path("p").asDouble());
-        tick.setQuantity(report.path("q").asDouble());
-        tick.setTimestampMs(report.path("T").asLong());
-        tick.setBuyerMaker(report.path("m").asBoolean());
+        tick.setTradeId(orderNode.path("ordId").asText());
+        tick.setSymbol("BTCUSDT");
+        tick.setPrice(orderNode.path("px").asDouble());
+        tick.setQuantity(orderNode.path("sz").asDouble());
+        tick.setTimestampMs(orderNode.path("ts").asLong());
+        tick.setBuyerMaker("buy".equals(orderNode.path("side").asText()));
         return tick;
     }
 
     /**
-     * 处理账户仓位更新
+     * 处理账户响应
      */
-    private void handleAccountPosition(JsonNode position) {
-        logger.debug("收到账户仓位更新: {}", position);
-    }
-
-    /**
-     * 处理余额更新
-     */
-    private void handleBalanceUpdate(JsonNode balance) {
-        logger.debug("收到余额更新: {}", balance);
+    private void handleAccountResponse(JsonNode accountNode) {
+        logger.debug("收到账户更新: {}", accountNode);
     }
 
     @Override
@@ -326,13 +373,11 @@ public class BTTradeGWWebSocketClient implements Actor {
 
     @Override
     public void stop() {
-
-
         destroy();
     }
 
     /**
-     * 币安交易WebSocket监听器
+     * Bitget交易WebSocket监听器
      */
     private class TradeWebSocketListener implements WebSocket.Listener {
 
