@@ -1,4 +1,4 @@
-package com.tanggo.fund.jnautilustrader.core.process;
+package com.tanggo.fund.jnautilustrader.core.process.stoikov;
 
 import com.tanggo.fund.jnautilustrader.core.entity.*;
 import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDelta;
@@ -70,6 +70,19 @@ public class AvellanedaStoikovStrategy implements Actor {
         this.eventHandlerRepo = eventHandlerRepo;
         this.params = params;
         this.state = AvellanedaStoikovState.initialState();
+
+        // 注册事件处理器
+        registerEventHandlers();
+    }
+
+    /**
+     * 注册事件处理器
+     */
+    private void registerEventHandlers() {
+        if (eventHandlerRepo != null) {
+            eventHandlerRepo.addHandler("BINANCE_TRADE_TICK", new TradeTickEventHandler());
+            eventHandlerRepo.addHandler("BINANCE_ORDER_BOOK_DELTA", new OrderBookDeltaEventHandler());
+        }
     }
 
 

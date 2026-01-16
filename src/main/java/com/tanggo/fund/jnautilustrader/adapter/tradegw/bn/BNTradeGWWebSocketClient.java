@@ -41,7 +41,7 @@ public class BNTradeGWWebSocketClient implements Actor {
     private final ObjectMapper objectMapper;
     private final ScheduledExecutorService reconnectExecutor = Executors.newSingleThreadScheduledExecutor();
     private final HttpClient httpClient;
-    @Value("${binance.websocket.trade.url: wss://stream.binance.com:9443/ws}")
+    @Value("${binance.websocket.trade.url:wss://stream.binance.com:9443/ws}")
     private String baseWebSocketUrl;
     private String listenKey; // 币安WebSocket用户数据流监听密钥
     private WebSocket webSocket;

@@ -41,13 +41,13 @@ public class CrossStrategy implements Actor {
     private Thread eventThread;
     private Thread strategyThread;
 
-    // 默认构造函数，用于 Spring 自动装配
+    // 默认构造函数，用于Spring自动装配
     public CrossStrategy() {
-        this.params = CrossArbitrageParams.defaultParams();
-        this.state = CrossArbitrageState.initialState();
         this.marketDataRepo = null;
         this.tradeCmdRepo = null;
         this.eventHandlerRepo = null;
+        this.params = CrossArbitrageParams.defaultParams();
+        this.state = CrossArbitrageState.initialState();
     }
 
     public CrossStrategy(EventRepo<MarketData> marketDataRepo, EventRepo<TradeCmd> tradeCmdRepo,

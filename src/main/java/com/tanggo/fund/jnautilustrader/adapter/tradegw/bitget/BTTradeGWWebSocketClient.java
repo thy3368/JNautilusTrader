@@ -40,7 +40,7 @@ public class BTTradeGWWebSocketClient implements Actor {
     private final ObjectMapper objectMapper;
     private final ScheduledExecutorService reconnectExecutor = Executors.newSingleThreadScheduledExecutor();
     private final HttpClient httpClient;
-    @Value("${bitget.websocket.trade.url: wss://ws.bitget.com/v2/ws/private}")
+    @Value("${bitget.websocket.trade.url:wss://ws.bitget.com/v2/ws/private}")
     private String baseWebSocketUrl;
     private String listenKey; // Bitget WebSocket用户数据流监听密钥
     private WebSocket webSocket;

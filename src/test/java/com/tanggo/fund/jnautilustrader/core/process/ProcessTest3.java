@@ -6,6 +6,7 @@ import com.tanggo.fund.jnautilustrader.adapter.tradegw.bn.BNTradeGWWebSocketClie
 import com.tanggo.fund.jnautilustrader.core.entity.Actor;
 import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
 import com.tanggo.fund.jnautilustrader.core.entity.TradeCmd;
+import com.tanggo.fund.jnautilustrader.core.process.stoikov.AvellanedaStoikovStrategy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
