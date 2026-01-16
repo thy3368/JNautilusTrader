@@ -1,9 +1,12 @@
 package com.tanggo.fund.jnautilustrader.core.process;
 
+import lombok.Data;
+
 /**
  * Avellaneda-Stoikov 策略参数类
  * 包含策略的所有配置参数
  */
+@Data
 public class AvellanedaStoikovParams {
     // 波动率 (每日)
     public double volatility;
@@ -34,9 +37,7 @@ public class AvellanedaStoikovParams {
         this.symbol = "BTCUSDT"; // 默认交易对
     }
 
-    public AvellanedaStoikovParams(double volatility, double lambda, double gamma,
-                                  double initialInventory, double orderQuantity,
-                                  double gridSpacing, double runTime, String symbol) {
+    public AvellanedaStoikovParams(double volatility, double lambda, double gamma, double initialInventory, double orderQuantity, double gridSpacing, double runTime, String symbol) {
         this.volatility = volatility;
         this.lambda = lambda;
         this.gamma = gamma;
@@ -51,43 +52,5 @@ public class AvellanedaStoikovParams {
         return new AvellanedaStoikovParams();
     }
 
-    public AvellanedaStoikovParams withVolatility(double volatility) {
-        this.volatility = volatility;
-        return this;
-    }
 
-    public AvellanedaStoikovParams withLambda(double lambda) {
-        this.lambda = lambda;
-        return this;
-    }
-
-    public AvellanedaStoikovParams withGamma(double gamma) {
-        this.gamma = gamma;
-        return this;
-    }
-
-    public AvellanedaStoikovParams withInitialInventory(double initialInventory) {
-        this.initialInventory = initialInventory;
-        return this;
-    }
-
-    public AvellanedaStoikovParams withOrderQuantity(double orderQuantity) {
-        this.orderQuantity = orderQuantity;
-        return this;
-    }
-
-    public AvellanedaStoikovParams withGridSpacing(double gridSpacing) {
-        this.gridSpacing = gridSpacing;
-        return this;
-    }
-
-    public AvellanedaStoikovParams withRunTime(double runTime) {
-        this.runTime = runTime;
-        return this;
-    }
-
-    public AvellanedaStoikovParams withSymbol(String symbol) {
-        this.symbol = symbol;
-        return this;
-    }
 }

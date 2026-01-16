@@ -1,9 +1,12 @@
 package com.tanggo.fund.jnautilustrader.core.process;
 
+import lombok.Data;
+
 /**
  * Avellaneda-Stoikov 策略状态类
  * 用于跟踪策略的执行状态
  */
+@Data
 public class AvellanedaStoikovState {
     // 当前时间
     public double currentTime;
@@ -41,10 +44,7 @@ public class AvellanedaStoikovState {
         this.isRunning = false;
     }
 
-    public AvellanedaStoikovState(double currentTime, double inventory, int tradeCount,
-                                  double totalProfit, double lastExecutionTime,
-                                  double lastTradePrice, double midPrice,
-                                  double bestBid, double bestAsk, boolean isRunning) {
+    public AvellanedaStoikovState(double currentTime, double inventory, int tradeCount, double totalProfit, double lastExecutionTime, double lastTradePrice, double midPrice, double bestBid, double bestAsk, boolean isRunning) {
         this.currentTime = currentTime;
         this.inventory = inventory;
         this.tradeCount = tradeCount;
@@ -75,17 +75,13 @@ public class AvellanedaStoikovState {
     }
 
     public String toString() {
-        return String.format("Time: %.2f, Inventory: %.4f, Trades: %d, Profit: %.2f, " +
-                        "MidPrice: %.2f, BestBid: %.2f, BestAsk: %.2f",
-                currentTime, inventory, tradeCount, totalProfit,
-                midPrice, bestBid, bestAsk);
+        return String.format("Time: %.2f, Inventory: %.4f, Trades: %d, Profit: %.2f, " + "MidPrice: %.2f, BestBid: %.2f, BestAsk: %.2f", currentTime, inventory, tradeCount, totalProfit, midPrice, bestBid, bestAsk);
     }
 
     public void start() {
         this.isRunning = true;
         this.startTime = System.currentTimeMillis();
         this.currentTime = 0;
-//        this.inventory = params.initialInventory;
 
     }
 }
