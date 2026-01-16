@@ -262,9 +262,17 @@ public class BTMDGWWebSocketClient implements Actor {
         if (entriesNode.isArray()) {
             for (JsonNode entryNode : entriesNode) {
                 java.util.List<String> entry = new java.util.ArrayList<>();
-                entry.add(entryNode.path("px").asText());
-                entry.add(entryNode.path("sz").asText());
-                entries.add(entry);
+                String price = entryNode.path("px").asText();
+                String quantity = entryNode.path("sz").asText();
+
+                // 检查价格和数量是否为空字符串
+                if (!price.isEmpty() && !quantity.isEmpty()) {
+                    entry.add(price);
+                    entry.add(quantity);
+                    entries.add(entry);
+                } else {
+                    logger.debug("忽略无效的订单簿条目: 价格={}, 数量={}", price, quantity);
+                }
             }
         }
 

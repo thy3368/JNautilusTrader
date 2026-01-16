@@ -376,13 +376,45 @@ public class CrossStrategy implements Actor {
             if (marketData.getMessage() instanceof OrderBookDepth10 orderBook) {
                 // 提取最佳买卖价
                 if (orderBook.getBids() != null && !orderBook.getBids().isEmpty()) {
-                    double bidPrice = Double.parseDouble(orderBook.getBids().get(0).get(0));
-                    state.setBinanceBidPrice(bidPrice);
+                    try {
+                        // 检查是否有足够的深度数据且不为空字符串
+                        if (orderBook.getBids().get(0) != null && orderBook.getBids().get(0).size() > 0) {
+                            String bidPriceStr = orderBook.getBids().get(0).get(0);
+                            if (bidPriceStr != null && !bidPriceStr.isEmpty()) {
+                                double bidPrice = Double.parseDouble(bidPriceStr);
+                                state.setBinanceBidPrice(bidPrice);
+                            } else {
+                                logger.warn("Binance bid price is empty string");
+                            }
+                        }
+                    } catch (NumberFormatException e) {
+                        logger.warn("Invalid Binance bid price format: {}",
+                            orderBook.getBids().get(0).get(0), e);
+                    } catch (Exception e) {
+                        logger.warn("Error parsing Binance bid price", e);
+                    }
                 }
+
                 if (orderBook.getAsks() != null && !orderBook.getAsks().isEmpty()) {
-                    double askPrice = Double.parseDouble(orderBook.getAsks().get(0).get(0));
-                    state.setBinanceAskPrice(askPrice);
+                    try {
+                        // 检查是否有足够的深度数据且不为空字符串
+                        if (orderBook.getAsks().get(0) != null && orderBook.getAsks().get(0).size() > 0) {
+                            String askPriceStr = orderBook.getAsks().get(0).get(0);
+                            if (askPriceStr != null && !askPriceStr.isEmpty()) {
+                                double askPrice = Double.parseDouble(askPriceStr);
+                                state.setBinanceAskPrice(askPrice);
+                            } else {
+                                logger.warn("Binance ask price is empty string");
+                            }
+                        }
+                    } catch (NumberFormatException e) {
+                        logger.warn("Invalid Binance ask price format: {}",
+                            orderBook.getAsks().get(0).get(0), e);
+                    } catch (Exception e) {
+                        logger.warn("Error parsing Binance ask price", e);
+                    }
                 }
+
                 // 更新中间价
                 if (state.getBinanceBidPrice() > 0 && state.getBinanceAskPrice() > 0) {
                     state.setBinanceMidPrice((state.getBinanceBidPrice() + state.getBinanceAskPrice()) / 2);
@@ -417,13 +449,45 @@ public class CrossStrategy implements Actor {
             if (marketData.getMessage() instanceof OrderBookDepth10 orderBook) {
                 // 提取最佳买卖价
                 if (orderBook.getBids() != null && !orderBook.getBids().isEmpty()) {
-                    double bidPrice = Double.parseDouble(orderBook.getBids().get(0).get(0));
-                    state.setBitgetBidPrice(bidPrice);
+                    try {
+                        // 检查是否有足够的深度数据且不为空字符串
+                        if (orderBook.getBids().get(0) != null && orderBook.getBids().get(0).size() > 0) {
+                            String bidPriceStr = orderBook.getBids().get(0).get(0);
+                            if (bidPriceStr != null && !bidPriceStr.isEmpty()) {
+                                double bidPrice = Double.parseDouble(bidPriceStr);
+                                state.setBitgetBidPrice(bidPrice);
+                            } else {
+                                logger.warn("Bitget bid price is empty string");
+                            }
+                        }
+                    } catch (NumberFormatException e) {
+                        logger.warn("Invalid Bitget bid price format: {}",
+                            orderBook.getBids().get(0).get(0), e);
+                    } catch (Exception e) {
+                        logger.warn("Error parsing Bitget bid price", e);
+                    }
                 }
+
                 if (orderBook.getAsks() != null && !orderBook.getAsks().isEmpty()) {
-                    double askPrice = Double.parseDouble(orderBook.getAsks().get(0).get(0));
-                    state.setBitgetAskPrice(askPrice);
+                    try {
+                        // 检查是否有足够的深度数据且不为空字符串
+                        if (orderBook.getAsks().get(0) != null && orderBook.getAsks().get(0).size() > 0) {
+                            String askPriceStr = orderBook.getAsks().get(0).get(0);
+                            if (askPriceStr != null && !askPriceStr.isEmpty()) {
+                                double askPrice = Double.parseDouble(askPriceStr);
+                                state.setBitgetAskPrice(askPrice);
+                            } else {
+                                logger.warn("Bitget ask price is empty string");
+                            }
+                        }
+                    } catch (NumberFormatException e) {
+                        logger.warn("Invalid Bitget ask price format: {}",
+                            orderBook.getAsks().get(0).get(0), e);
+                    } catch (Exception e) {
+                        logger.warn("Error parsing Bitget ask price", e);
+                    }
                 }
+
                 // 更新中间价
                 if (state.getBitgetBidPrice() > 0 && state.getBitgetAskPrice() > 0) {
                     state.setBitgetMidPrice((state.getBitgetBidPrice() + state.getBitgetAskPrice()) / 2);
