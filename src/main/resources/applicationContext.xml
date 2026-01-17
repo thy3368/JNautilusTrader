@@ -30,7 +30,7 @@
             </list>
         </property>
         <!-- 策略 -->
-        <property name="service" ref="crossStrategy"/>
+        <property name="service" ref="crossAppService"/>
     </bean>
 
     <!-- ==================== CrossStrategyConfig - 跨交易所策略配置 ==================== -->
@@ -53,13 +53,13 @@
           factory-method="defaultParams"/>
 
     <!-- 跨交易所套利策略 -->
-    <bean id="crossStrategy" class="com.tanggo.fund.jnautilustrader.core.process.cross.CrossAppService">
+    <bean id="crossAppService" class="com.tanggo.fund.jnautilustrader.core.process.cross.CrossAppService">
         <property name="params" ref="crossArbitrageParams"/>
         <property name="marketDataRepo" ref="marketDataEventRepo"/>
         <property name="tradeCmdRepo" ref="tradeCmdEventRepo"/>
-        <property name="eventHandlerRepo" ref="eventHandlerRepo"/>
-        <property name="strategyExecutorService" ref="strategyExecutorService"/>
-        <property name="eventExecutorService" ref="eventExecutorService"/>
+<!--        <property name="eventHandlerRepo" ref="eventHandlerRepo"/>-->
+        <property name="singleThreadExecutor" ref="singleThreadExecutorService"/>
+<!--        <property name="eventExecutorService" ref="eventExecutorService"/>-->
     </bean>
 
     <!-- 币安市场数据网关WebSocket客户端 -->

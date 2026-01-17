@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- 控制台输出配置 -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- 应用程序日志级别设置为DEBUG -->
+    <logger name="com.tanggo.fund.jnautilustrader" level="DEBUG"/>
+
+    <!-- Spring框架日志级别 -->
+    <logger name="org.springframework" level="INFO"/>
+
+<!--    &lt;!&ndash; 根日志级别 &ndash;&gt;-->
+<!--    <root level="INFO">-->
+<!--        <appender-ref ref="CONSOLE"/>-->
+<!--    </root>-->
+
+    <!-- 设置根日志级别为DEBUG -->
+    <root level="DEBUG">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+</configuration>

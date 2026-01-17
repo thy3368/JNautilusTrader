@@ -25,8 +25,11 @@ import java.util.concurrent.*;
 public class BNMDGWWebSocketClient implements Actor {
 
     private static final Logger logger = LoggerFactory.getLogger(BNMDGWWebSocketClient.class);
-    // 币安WebSocket API地址 - 同时订阅交易、订单簿深度和增量更新
-    private static final String BINANCE_WS_URL = "wss://stream.binance.com:9443/stream?streams=btcusdt@trade/btcusdt@depth/btcusdt@depthUpdate";
+    // 币安WebSocket API地址 - 同时订阅交易、订单簿深度和bookTicker
+    // btcusdt@trade: 实时交易数据
+    // btcusdt@depth10@100ms: 订单簿快照(10档,100毫秒推送)
+    // btcusdt@bookTicker: 最优买卖价实时更新
+    private static final String BINANCE_WS_URL = "wss://stream.binance.com:9443/stream?streams=btcusdt@trade/btcusdt@depth10@100ms/btcusdt@bookTicker";
     // 重连间隔（秒）
     private static final int RECONNECT_DELAY = 5;
     private ObjectMapper objectMapper = new ObjectMapper();
@@ -140,16 +143,21 @@ public class BNMDGWWebSocketClient implements Actor {
 
         // 检查是否是组合流格式（包含stream和data字段）
         if (rootNode.has("stream") && rootNode.has("data")) {
+            String streamName = rootNode.path("stream").asText();
             JsonNode dataNode = rootNode.path("data");
             String eventType = dataNode.path("e").asText();
+
+            // depth10@100ms流没有事件类型字段,需要通过stream名称识别
+            if (streamName.contains("@depth10")) {
+                ThreadLogger.debug(logger, "Processing depth10 snapshot: {}", dataNode.toString());
+                return parseOrderBookDepth(dataNode.toString());
+            }
 
             switch (eventType) {
                 case "trade":
                     return parseTradeTick(dataNode.toString());
                 case "aggTrade":
                     return parseAggregateTradeTick(dataNode.toString());
-                case "depth":
-                    return parseOrderBookDepth(dataNode.toString());
                 case "depthUpdate":
                     return parseOrderBookDelta(dataNode.toString());
                 case "kline":
@@ -166,7 +174,7 @@ public class BNMDGWWebSocketClient implements Actor {
                 case "bookTicker":
                     return parseBookTicker(dataNode.toString());
                 default:
-                    ThreadLogger.debug(logger, "Received unsupported event type: {}", eventType);
+                    ThreadLogger.debug(logger, "Received unsupported event type: {}, stream: {}", eventType, streamName);
                     return null;
             }
         } else {
@@ -178,8 +186,6 @@ public class BNMDGWWebSocketClient implements Actor {
                     return parseTradeTick(message);
                 case "aggTrade":
                     return parseAggregateTradeTick(message);
-                case "depth":
-                    return parseOrderBookDepth(message);
                 case "depthUpdate":
                     return parseOrderBookDelta(message);
                 case "kline":
@@ -444,7 +450,7 @@ public class BNMDGWWebSocketClient implements Actor {
                         event.type = determineEventType(parsedMessage);
                         event.payload = marketData;
                         mdEventRepo.send(event);
-                        ThreadLogger.info(logger, "Sent market data event: {}", event.type);
+//                        ThreadLogger.info(logger, "Sent market data event: {}", event.type);
                     }
 
                     // 清空缓冲区
