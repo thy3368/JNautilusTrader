@@ -10,10 +10,12 @@ import java.util.List;
 @Data
 public class ApplicationConfig {
 
+    //行情
     private List<Actor> mdClients;
+    //交易
     private List<Actor> tradeClients;
+    //应用服务
     private Actor service;
-
 
 
 }

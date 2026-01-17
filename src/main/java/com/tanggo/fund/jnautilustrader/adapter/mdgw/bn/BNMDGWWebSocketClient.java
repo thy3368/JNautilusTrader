@@ -15,6 +15,8 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.*;
 
 /**
@@ -28,13 +30,12 @@ public class BNMDGWWebSocketClient implements Actor {
     // 重连间隔（秒）
     private static final int RECONNECT_DELAY = 5;
     private ObjectMapper objectMapper = new ObjectMapper();
-    private BlockingQueueEventRepo<MarketData> mdEventRepo;
-    private ScheduledExecutorService timerExecutorService;
-    private ExecutorService wsExecutorService;  // WebSocket专用线程池
+    private final BlockingQueueEventRepo<MarketData> mdEventRepo;
+    private final ScheduledExecutorService timerExecutorService;
+    private final ExecutorService wsExecutorService;  // WebSocket专用线程池
     private HttpClient httpClient;  // 复用HttpClient实例
     private WebSocket webSocket;
     private volatile boolean reconnecting;
-
 
 
     /**
@@ -63,13 +64,6 @@ public class BNMDGWWebSocketClient implements Actor {
 
             // 创建自定义线程池的HttpClient（如果尚未创建）
             if (httpClient == null) {
-                // 创建WebSocket专用线程池，可自定义名称
-//                wsExecutorService = Executors.newSingleThreadExecutor(r -> {
-//                    Thread t = new Thread(r, "BN-MDGW-WS-Thread");
-//                    t.setDaemon(true);
-//                    return t;
-//                });
-
                 httpClient = HttpClient.newBuilder().connectTimeout(java.time.Duration.ofSeconds(10)).executor(wsExecutorService)  // 设置自定义线程池
                         .build();
             }
@@ -236,70 +230,174 @@ public class BNMDGWWebSocketClient implements Actor {
      * 解析币安WebSocket返回的交易数据
      */
     private TradeTick parseTradeTick(String message) throws Exception {
-        return objectMapper.readValue(message, TradeTick.class);
+        JsonNode rootNode = objectMapper.readTree(message);
+        TradeTick tradeTick = new TradeTick();
+        tradeTick.tradeId = rootNode.path("t").asText();
+        tradeTick.symbol = rootNode.path("s").asText();
+        tradeTick.price = rootNode.path("p").asDouble();
+        tradeTick.quantity = rootNode.path("q").asDouble();
+        tradeTick.timestampMs = rootNode.path("T").asLong();
+        tradeTick.isBuyerMaker = rootNode.path("m").asBoolean();
+        return tradeTick;
     }
 
     /**
      * 解析币安WebSocket返回的聚合交易数据
      */
     private TradeTick parseAggregateTradeTick(String message) throws Exception {
-        return objectMapper.readValue(message, TradeTick.class);
+        JsonNode rootNode = objectMapper.readTree(message);
+        TradeTick tradeTick = new TradeTick();
+        tradeTick.tradeId = rootNode.path("a").asText();
+        tradeTick.symbol = rootNode.path("s").asText();
+        tradeTick.price = rootNode.path("p").asDouble();
+        tradeTick.quantity = rootNode.path("q").asDouble();
+        tradeTick.timestampMs = rootNode.path("T").asLong();
+        tradeTick.isBuyerMaker = rootNode.path("m").asBoolean();
+        return tradeTick;
     }
 
     /**
      * 解析币安WebSocket返回的订单簿深度数据
      */
     private OrderBookDepth10 parseOrderBookDepth(String message) throws Exception {
-        return objectMapper.readValue(message, OrderBookDepth10.class);
+        JsonNode rootNode = objectMapper.readTree(message);
+        OrderBookDepth10 depth = new OrderBookDepth10();
+        depth.setSymbol(rootNode.path("s").asText());
+        depth.setLastUpdateId(rootNode.path("lastUpdateId").asLong());
+        depth.setBids(parseOrderBookLevels(rootNode.path("bids")));
+        depth.setAsks(parseOrderBookLevels(rootNode.path("asks")));
+        return depth;
     }
 
     /**
      * 解析币安WebSocket返回的订单簿增量更新数据
      */
     private OrderBookDeltas parseOrderBookDelta(String message) throws Exception {
-        return objectMapper.readValue(message, OrderBookDeltas.class);
+        JsonNode rootNode = objectMapper.readTree(message);
+        OrderBookDeltas deltas = new OrderBookDeltas();
+        deltas.setSymbol(rootNode.path("s").asText());
+        deltas.setEventTime(rootNode.path("E").asLong());
+        deltas.setLastUpdateId(rootNode.path("u").asLong());
+        deltas.setBids(parseOrderBookLevels(rootNode.path("b")));
+        deltas.setAsks(parseOrderBookLevels(rootNode.path("a")));
+        return deltas;
     }
 
     /**
      * 解析币安WebSocket返回的K线数据
      */
     private Bar parseBar(String message) throws Exception {
-        return objectMapper.readValue(message, Bar.class);
+        JsonNode rootNode = objectMapper.readTree(message);
+        Bar bar = new Bar();
+        // 币安K线数据结构: t=开盘时间, T=收盘时间, s=品种, i=间隔, f=首笔交易ID, L=末笔交易ID,
+        // o=开盘价, h=最高价, l=最低价, c=收盘价, v=成交量, n=交易次数, x=是否完成, q=成交额,
+        // V=主动买入成交量, Q=主动买入成交额
+        bar.setSymbol(rootNode.path("s").asText());
+        bar.setOpenTime(rootNode.path("t").asLong());
+        bar.setCloseTime(rootNode.path("T").asLong());
+        bar.setInterval(rootNode.path("i").asText());
+        bar.setOpenPrice(rootNode.path("o").asDouble());
+        bar.setHighPrice(rootNode.path("h").asDouble());
+        bar.setLowPrice(rootNode.path("l").asDouble());
+        bar.setClosePrice(rootNode.path("c").asDouble());
+        bar.setVolume(rootNode.path("v").asDouble());
+        bar.setTradeCount(rootNode.path("n").asInt());
+        bar.setQuoteVolume(rootNode.path("q").asDouble());
+        bar.setTakerBuyVolume(rootNode.path("V").asDouble());
+        bar.setTakerBuyQuoteVolume(rootNode.path("Q").asDouble());
+        bar.setClosed(rootNode.path("x").asBoolean());
+        return bar;
     }
 
     /**
      * 解析币安WebSocket返回的报价数据
      */
     private QuoteTick parseQuoteTick(String message) throws Exception {
-        return objectMapper.readValue(message, QuoteTick.class);
+        JsonNode rootNode = objectMapper.readTree(message);
+        QuoteTick quoteTick = new QuoteTick();
+        quoteTick.setSymbol(rootNode.path("s").asText());
+        quoteTick.setOpenPrice(rootNode.path("o").asDouble());
+        quoteTick.setHighPrice(rootNode.path("h").asDouble());
+        quoteTick.setLowPrice(rootNode.path("l").asDouble());
+        quoteTick.setClosePrice(rootNode.path("c").asDouble());
+        quoteTick.setVolume(rootNode.path("v").asDouble());
+        quoteTick.setQuoteVolume(rootNode.path("q").asDouble());
+        quoteTick.setTimestampMs(rootNode.path("E").asLong());
+        return quoteTick;
     }
 
     /**
      * 解析币安WebSocket返回的标记价格更新数据
      */
     private MarkPriceUpdate parseMarkPriceUpdate(String message) throws Exception {
-        return objectMapper.readValue(message, MarkPriceUpdate.class);
+        JsonNode rootNode = objectMapper.readTree(message);
+        MarkPriceUpdate markPriceUpdate = new MarkPriceUpdate();
+        markPriceUpdate.setSymbol(rootNode.path("s").asText());
+        markPriceUpdate.setMarkPrice(rootNode.path("p").asDouble());
+        markPriceUpdate.setIndexPrice(rootNode.path("i").asDouble());
+        markPriceUpdate.setFundingRate(rootNode.path("r").asDouble());
+        markPriceUpdate.setNextFundingTime(rootNode.path("T").asLong());
+        markPriceUpdate.setEventTime(rootNode.path("E").asLong());
+        return markPriceUpdate;
     }
 
     /**
      * 解析币安WebSocket返回的指数价格更新数据
      */
     private IndexPriceUpdate parseIndexPriceUpdate(String message) throws Exception {
-        return objectMapper.readValue(message, IndexPriceUpdate.class);
+        JsonNode rootNode = objectMapper.readTree(message);
+        IndexPriceUpdate indexPriceUpdate = new IndexPriceUpdate();
+        indexPriceUpdate.setSymbol(rootNode.path("s").asText());
+        indexPriceUpdate.setIndexPrice(rootNode.path("i").asDouble());
+        indexPriceUpdate.setEventTime(rootNode.path("E").asLong());
+        return indexPriceUpdate;
     }
 
     /**
      * 解析币安WebSocket返回的资金费率更新数据
      */
     private FundingRateUpdate parseFundingRateUpdate(String message) throws Exception {
-        return objectMapper.readValue(message, FundingRateUpdate.class);
+        JsonNode rootNode = objectMapper.readTree(message);
+        FundingRateUpdate fundingRateUpdate = new FundingRateUpdate();
+        fundingRateUpdate.setSymbol(rootNode.path("s").asText());
+        fundingRateUpdate.setFundingRate(rootNode.path("r").asDouble());
+        fundingRateUpdate.setFundingTime(rootNode.path("T").asLong());
+        fundingRateUpdate.setEventTime(rootNode.path("E").asLong());
+        return fundingRateUpdate;
     }
 
     /**
      * 解析币安WebSocket返回的最优买卖盘数据
      */
     private QuoteTick parseBookTicker(String message) throws Exception {
-        return objectMapper.readValue(message, QuoteTick.class);
+        JsonNode rootNode = objectMapper.readTree(message);
+        QuoteTick quoteTick = new QuoteTick();
+        quoteTick.setSymbol(rootNode.path("s").asText());
+        quoteTick.setBidPrice(rootNode.path("b").asDouble());
+        quoteTick.setBidQuantity(rootNode.path("B").asDouble());
+        quoteTick.setAskPrice(rootNode.path("a").asDouble());
+        quoteTick.setAskQuantity(rootNode.path("A").asDouble());
+        quoteTick.setTimestampMs(rootNode.path("E").asLong());
+        return quoteTick;
+    }
+
+    /**
+     * 解析订单簿档位数据
+     */
+    private List<List<String>> parseOrderBookLevels(JsonNode levelsNode) {
+        if (levelsNode.isMissingNode() || !levelsNode.isArray()) {
+            return List.of();
+        }
+        List<List<String>> levels = new ArrayList<>();
+        for (JsonNode levelNode : levelsNode) {
+            if (levelNode.isArray() && levelNode.size() >= 2) {
+                List<String> level = new ArrayList<>();
+                level.add(levelNode.get(0).asText());
+                level.add(levelNode.get(1).asText());
+                levels.add(level);
+            }
+        }
+        return levels;
     }
 
     /**

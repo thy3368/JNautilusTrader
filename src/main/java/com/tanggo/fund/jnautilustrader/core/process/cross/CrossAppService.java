@@ -350,6 +350,22 @@ public class CrossAppService implements Actor {
         // TODO: 实现取消订单逻辑
     }
 
+    public void setParams(CrossArbitrageParams params) {
+        this.params = params;
+        // 初始化策略状态
+        if (this.state == null) {
+            this.state = new CrossArbitrageState(params);
+        } else {
+            this.state.setParams(params);
+        }
+    }
+
+    public void setEventHandlerRepo(EventHandlerRepo<MarketData> eventHandlerRepo) {
+        this.eventHandlerRepo = eventHandlerRepo;
+        // 注册事件处理器
+        registerEventHandlers();
+    }
+
     /**
      * 处理币安交易Tick事件
      */
@@ -388,8 +404,7 @@ public class CrossAppService implements Actor {
                             }
                         }
                     } catch (NumberFormatException e) {
-                        logger.warn("Invalid Binance bid price format: {}",
-                            orderBook.getBids().get(0).get(0), e);
+                        logger.warn("Invalid Binance bid price format: {}", orderBook.getBids().get(0).get(0), e);
                     } catch (Exception e) {
                         logger.warn("Error parsing Binance bid price", e);
                     }
@@ -408,8 +423,7 @@ public class CrossAppService implements Actor {
                             }
                         }
                     } catch (NumberFormatException e) {
-                        logger.warn("Invalid Binance ask price format: {}",
-                            orderBook.getAsks().get(0).get(0), e);
+                        logger.warn("Invalid Binance ask price format: {}", orderBook.getAsks().get(0).get(0), e);
                     } catch (Exception e) {
                         logger.warn("Error parsing Binance ask price", e);
                     }
@@ -422,6 +436,8 @@ public class CrossAppService implements Actor {
             }
         }
     }
+
+    // Setter methods for Spring dependency injection
 
     /**
      * 处理Bitget交易Tick事件
@@ -461,8 +477,7 @@ public class CrossAppService implements Actor {
                             }
                         }
                     } catch (NumberFormatException e) {
-                        logger.warn("Invalid Bitget bid price format: {}",
-                            orderBook.getBids().get(0).get(0), e);
+                        logger.warn("Invalid Bitget bid price format: {}", orderBook.getBids().get(0).get(0), e);
                     } catch (Exception e) {
                         logger.warn("Error parsing Bitget bid price", e);
                     }
@@ -481,8 +496,7 @@ public class CrossAppService implements Actor {
                             }
                         }
                     } catch (NumberFormatException e) {
-                        logger.warn("Invalid Bitget ask price format: {}",
-                            orderBook.getAsks().get(0).get(0), e);
+                        logger.warn("Invalid Bitget ask price format: {}", orderBook.getAsks().get(0).get(0), e);
                     } catch (Exception e) {
                         logger.warn("Error parsing Bitget ask price", e);
                     }
@@ -496,42 +510,6 @@ public class CrossAppService implements Actor {
         }
     }
 
-    // Setter methods for Spring dependency injection
 
-    public void setParams(CrossArbitrageParams params) {
-        this.params = params;
-        // 初始化策略状态
-        if (this.state == null) {
-            this.state = new CrossArbitrageState(params);
-        } else {
-            this.state.setParams(params);
-        }
-    }
-
-    public void setState(CrossArbitrageState state) {
-        this.state = state;
-    }
-
-    public void setMarketDataRepo(EventRepo<MarketData> marketDataRepo) {
-        this.marketDataRepo = marketDataRepo;
-    }
-
-    public void setTradeCmdRepo(EventRepo<TradeCmd> tradeCmdRepo) {
-        this.tradeCmdRepo = tradeCmdRepo;
-    }
-
-    public void setEventHandlerRepo(EventHandlerRepo<MarketData> eventHandlerRepo) {
-        this.eventHandlerRepo = eventHandlerRepo;
-        // 注册事件处理器
-        registerEventHandlers();
-    }
-
-    public void setStrategyExecutorService(ExecutorService strategyExecutorService) {
-        this.strategyExecutorService = strategyExecutorService;
-    }
-
-    public void setEventExecutorService(ExecutorService eventExecutorService) {
-        this.eventExecutorService = eventExecutorService;
-    }
 }
 

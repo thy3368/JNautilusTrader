@@ -10,8 +10,6 @@ import com.tanggo.fund.jnautilustrader.core.entity.data.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpClient;
@@ -55,8 +53,7 @@ public class BTMDGWWebSocketClient implements Actor {
     /**
      * 构造函数 - 包含所有依赖
      */
-    public BTMDGWWebSocketClient(BlockingQueueEventRepo<MarketData> mdEventRepo,
-                                  ScheduledExecutorService timerExecutorService) {
+    public BTMDGWWebSocketClient(BlockingQueueEventRepo<MarketData> mdEventRepo, ScheduledExecutorService timerExecutorService) {
         this(mdEventRepo);
         this.timerExecutorService = timerExecutorService;
     }
@@ -262,16 +259,22 @@ public class BTMDGWWebSocketClient implements Actor {
         if (entriesNode.isArray()) {
             for (JsonNode entryNode : entriesNode) {
                 java.util.List<String> entry = new java.util.ArrayList<>();
-                String price = entryNode.path("px").asText();
-                String quantity = entryNode.path("sz").asText();
 
-                // 检查价格和数量是否为空字符串
-                if (!price.isEmpty() && !quantity.isEmpty()) {
-                    entry.add(price);
-                    entry.add(quantity);
-                    entries.add(entry);
+                // Bitget books频道返回的格式是 ["价格", "数量"] 数组
+                if (entryNode.isArray() && entryNode.size() >= 2) {
+                    String price = entryNode.get(0).asText();
+                    String quantity = entryNode.get(1).asText();
+
+                    // 检查价格和数量是否为空字符串
+                    if (!price.isEmpty() && !quantity.isEmpty()) {
+                        entry.add(price);
+                        entry.add(quantity);
+                        entries.add(entry);
+                    } else {
+                        logger.debug("忽略无效的订单簿条目: 价格={}, 数量={}", price, quantity);
+                    }
                 } else {
-                    logger.debug("忽略无效的订单簿条目: 价格={}, 数量={}", price, quantity);
+                    logger.debug("忽略无效的订单簿条目格式: {}", entryNode);
                 }
             }
         }

@@ -33,7 +33,7 @@ public class Process {
             startMarketDataClients();
 
             // 启动策略
-            startStrategy();
+            startAppService();
 
             // 启动交易客户端
 //            startTradeClients();
@@ -71,7 +71,7 @@ public class Process {
     /**
      * 启动策略
      */
-    private void startStrategy() {
+    private void startAppService() {
         Actor strategy = applicationConfig.getService();
         if (strategy == null) {
             logger.warn("未配置策略");
