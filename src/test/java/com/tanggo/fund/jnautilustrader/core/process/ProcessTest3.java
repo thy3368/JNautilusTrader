@@ -6,7 +6,7 @@ import com.tanggo.fund.jnautilustrader.adapter.tradegw.bn.BNTradeGWWebSocketClie
 import com.tanggo.fund.jnautilustrader.core.entity.Actor;
 import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
 import com.tanggo.fund.jnautilustrader.core.entity.TradeCmd;
-import com.tanggo.fund.jnautilustrader.core.process.stoikov.AvellanedaStoikovStrategy;
+import com.tanggo.fund.jnautilustrader.core.process.stoikov.AvellanedaStoikovAppService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -25,7 +25,7 @@ class ProcessTest3 {
 
     private Actor tradegwActor;
 
-    private AvellanedaStoikovStrategy stoikovStrategy;
+    private AvellanedaStoikovAppService stoikovStrategy;
 
     private BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo;
 
@@ -42,17 +42,17 @@ class ProcessTest3 {
         tradeCmdBlockingQueueEventRepo = new BlockingQueueEventRepo<>();
 
         // 创建 WebSocket 客户端
-        mdgwActor = new BNMDGWWebSocketClient(marketDataBlockingQueueEventRepo);
+        mdgwActor = new BNMDGWWebSocketClient(marketDataBlockingQueueEventRepo,null);
 
         // 创建 WebSocket 客户端
         tradegwActor = new BNTradeGWWebSocketClient(marketDataBlockingQueueEventRepo, tradeCmdBlockingQueueEventRepo);
 
 
-        mdgwActor.start();
-        tradegwActor.start();
+        mdgwActor.start_link();
+        tradegwActor.start_link();
 
 
-        stoikovStrategy.start();
+        stoikovStrategy.start_link();
 
         logger.info("测试环境初始化完成");
     }

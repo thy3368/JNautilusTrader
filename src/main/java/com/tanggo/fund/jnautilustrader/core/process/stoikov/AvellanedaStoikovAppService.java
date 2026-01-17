@@ -4,7 +4,6 @@ import com.tanggo.fund.jnautilustrader.core.entity.*;
 import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDelta;
 import com.tanggo.fund.jnautilustrader.core.entity.data.PlaceOrder;
 import com.tanggo.fund.jnautilustrader.core.entity.data.TradeTick;
-import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
 
@@ -33,7 +32,7 @@ import java.util.concurrent.TimeUnit;
  * @version 1.0
  */
 
-public class AvellanedaStoikovStrategy implements Actor {
+public class AvellanedaStoikovAppService implements Actor {
 
     // 策略参数 todo可以repo
     private final AvellanedaStoikovParams params;
@@ -51,7 +50,7 @@ public class AvellanedaStoikovStrategy implements Actor {
     private Thread strategyThread;
 
     // 默认构造函数，用于 Spring 自动装配
-    public AvellanedaStoikovStrategy() {
+    public AvellanedaStoikovAppService() {
         this.params = AvellanedaStoikovParams.defaultParams();
         this.state = AvellanedaStoikovState.initialState();
         this.marketDataRepo = null;
@@ -59,11 +58,11 @@ public class AvellanedaStoikovStrategy implements Actor {
         this.eventHandlerRepo = null;
     }
 
-    public AvellanedaStoikovStrategy(EventRepo<MarketData> marketDataRepo, EventRepo<TradeCmd> tradeCmdRepo, EventHandlerRepo<MarketData> eventHandlerRepo) {
+    public AvellanedaStoikovAppService(EventRepo<MarketData> marketDataRepo, EventRepo<TradeCmd> tradeCmdRepo, EventHandlerRepo<MarketData> eventHandlerRepo) {
         this(marketDataRepo, tradeCmdRepo, eventHandlerRepo, AvellanedaStoikovParams.defaultParams());
     }
 
-    public AvellanedaStoikovStrategy(EventRepo<MarketData> marketDataRepo, EventRepo<TradeCmd> tradeCmdRepo, EventHandlerRepo<MarketData> eventHandlerRepo, AvellanedaStoikovParams params) {
+    public AvellanedaStoikovAppService(EventRepo<MarketData> marketDataRepo, EventRepo<TradeCmd> tradeCmdRepo, EventHandlerRepo<MarketData> eventHandlerRepo, AvellanedaStoikovParams params) {
         this.marketDataRepo = marketDataRepo;
         this.tradeCmdRepo = tradeCmdRepo;
         this.eventHandlerRepo = eventHandlerRepo;
@@ -89,7 +88,7 @@ public class AvellanedaStoikovStrategy implements Actor {
      * 启动策略
      */
     @Override
-    public void start() {
+    public void start_link() {
 
 
 

@@ -52,16 +52,17 @@ public class BNMDGWWebSocketClient implements Actor {
     /**
      * 构造函数 - 用于注入依赖
      */
-    public BNMDGWWebSocketClient(BlockingQueueEventRepo<MarketData> mdEventRepo) {
+    public BNMDGWWebSocketClient(BlockingQueueEventRepo<MarketData> mdEventRepo,ExecutorService wsExecutorService) {
         this();
         this.mdEventRepo = mdEventRepo;
+        this.wsExecutorService = wsExecutorService;
     }
 
     /**
      * 构造函数 - 包含所有依赖
      */
-    public BNMDGWWebSocketClient(BlockingQueueEventRepo<MarketData> mdEventRepo, ScheduledExecutorService timerExecutorService) {
-        this(mdEventRepo);
+    public BNMDGWWebSocketClient(BlockingQueueEventRepo<MarketData> mdEventRepo, ScheduledExecutorService timerExecutorService,ExecutorService wsExecutorService) {
+        this(mdEventRepo, wsExecutorService);
         this.timerExecutorService = timerExecutorService;
     }
 
@@ -81,11 +82,11 @@ public class BNMDGWWebSocketClient implements Actor {
             // 创建自定义线程池的HttpClient（如果尚未创建）
             if (httpClient == null) {
                 // 创建WebSocket专用线程池，可自定义名称
-                wsExecutorService = Executors.newSingleThreadExecutor(r -> {
-                    Thread t = new Thread(r, "BN-MDGW-WS-Thread");
-                    t.setDaemon(true);
-                    return t;
-                });
+//                wsExecutorService = Executors.newSingleThreadExecutor(r -> {
+//                    Thread t = new Thread(r, "BN-MDGW-WS-Thread");
+//                    t.setDaemon(true);
+//                    return t;
+//                });
 
                 httpClient = HttpClient.newBuilder()
                         .connectTimeout(java.time.Duration.ofSeconds(10))
@@ -148,7 +149,7 @@ public class BNMDGWWebSocketClient implements Actor {
     }
 
     @Override
-    public void start() {
+    public void start_link() {
         connect();
 
     }

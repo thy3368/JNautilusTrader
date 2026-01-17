@@ -25,7 +25,7 @@ class ProcessTest {
     void abc() {
         Actor actor = null;
 
-        actor.start();
+        actor.start_link();
         actor.stop();
 
 

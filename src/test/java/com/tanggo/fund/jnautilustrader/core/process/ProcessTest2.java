@@ -12,6 +12,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.concurrent.CustomizableThreadFactory;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadInfo;
@@ -19,7 +20,9 @@ import java.lang.management.ThreadMXBean;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * WebSocket 客户端集成测试
@@ -45,19 +48,45 @@ class ProcessTest2 {
     // 线程池
     private ExecutorService executorService;
 
+    private ExecutorService wsExecutorService;
+
+
+    public ThreadFactory ioThreadFactory() {
+        return new CustomizableThreadFactory("io-worker-") {
+            private final AtomicInteger threadNumber = new AtomicInteger(1);
+
+            @Override
+            public Thread newThread(Runnable r) {
+                Thread thread = super.newThread(r);
+                thread.setName("io-worker-消费" + threadNumber.getAndIncrement());
+                thread.setPriority(Thread.NORM_PRIORITY);
+                thread.setDaemon(true);
+                return thread;
+            }
+        };
+    }
+
+
     @BeforeEach
     void setUp() {
         ThreadLogger.info(logger, "=== 初始化测试环境 ===");
 
 
         // 创建线程池
-        executorService = Executors.newFixedThreadPool(2);
+        executorService = Executors.newSingleThreadExecutor(ioThreadFactory());
+
+        wsExecutorService = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "BN-MDGW-WS-Thread");
+            t.setDaemon(true);
+            return t;
+        });
+
 
         // 创建市场数据事件仓库
         mdEventRepo = new BlockingQueueEventRepo<>();
 
         // 创建 WebSocket 客户端
-        bnmdgwWebSocketClient = new BNMDGWWebSocketClient(mdEventRepo);
+        bnmdgwWebSocketClient = new BNMDGWWebSocketClient(mdEventRepo, wsExecutorService);
 
         logger.info("测试环境初始化完成");
     }
@@ -106,7 +135,7 @@ class ProcessTest2 {
 
         // 启动 WebSocket 客户端连接
         ThreadLogger.info(logger, "正在启动 WebSocket 客户端...");
-        bnmdgwWebSocketClient.start();
+        bnmdgwWebSocketClient.start_link();
 
         // 等待连接建立
         Thread.sleep(2000);
@@ -193,13 +222,7 @@ class ProcessTest2 {
         String priorityStr = "P" + info.getPriority();
         String daemonStr = info.isDaemon() ? "[Daemon]" : "";
 
-        ThreadLogger.info(logger, "{}[{}] {} ({}) {} {}",
-                indent,
-                info.getThreadId(),
-                info.getThreadName(),
-                stateStr,
-                priorityStr,
-                daemonStr);
+        ThreadLogger.info(logger, "{}[{}] {} ({}) {} {}", indent, info.getThreadId(), info.getThreadName(), stateStr, priorityStr, daemonStr);
 
         // 递归打印子线程（这里我们基于线程组和名称关联）
         // 简单的启发式规则：如果线程名称包含父线程的名称特征，或者线程组相同
@@ -223,10 +246,7 @@ class ProcessTest2 {
         if (parentGroup != null && childGroup != null && parentGroup == childGroup) {
             // 检查子线程是否可能是父线程创建的
             // 例如：pool-1-thread-1 是 Executors.newFixedThreadPool 创建的
-            if (childInfo.getThreadName().startsWith("pool-") ||
-                childInfo.getThreadName().startsWith("BN-MDGW-WS-")) {
-                return true;
-            }
+            return childInfo.getThreadName().startsWith("pool-") || childInfo.getThreadName().startsWith("BN-MDGW-WS-");
         }
         return false;
     }

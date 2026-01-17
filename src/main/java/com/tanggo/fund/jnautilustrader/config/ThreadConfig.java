@@ -1,7 +1,6 @@
 package com.tanggo.fund.jnautilustrader.config;
 
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.concurrent.CustomizableThreadFactory;
 
 import java.util.concurrent.*;
@@ -9,6 +8,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 
 // 1. 市场行情接收解码(行情适配器 每适配器一个线程） eventloop; 2.行情策略及策略计算发出交易指令（策略执行 每个策略一个线程）eventloop; 交易编码及发送（交易适配器 每适配器一个线程）eventloop
+
 /**
  * 高性能线程模型配置
  * 针对低时延交易系统优化的线程池配置
@@ -73,14 +73,8 @@ public class ThreadConfig {
     @Bean("marketDataExecutorService")
     public ExecutorService marketDataExecutorService() {
         int poolSize = 4; // 预留4个交易所的接收线程
-        return new ThreadPoolExecutor(
-                poolSize,
-                poolSize,
-                0L,
-                TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>(QUEUE_CAPACITY * 2), // 市场数据量大,队列容量加倍
-                marketDataThreadFactory(),
-                new ThreadPoolExecutor.DiscardOldestPolicy() // 丢弃最旧数据,保证实时性
+        return new ThreadPoolExecutor(poolSize, poolSize, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(QUEUE_CAPACITY * 2), // 市场数据量大,队列容量加倍
+                marketDataThreadFactory(), new ThreadPoolExecutor.DiscardOldestPolicy() // 丢弃最旧数据,保证实时性
         );
     }
 
@@ -90,15 +84,7 @@ public class ThreadConfig {
      */
     @Bean("marketDataProcessorExecutorService")
     public ExecutorService marketDataProcessorExecutorService() {
-        return new ThreadPoolExecutor(
-                CORE_POOL_SIZE,
-                MAX_POOL_SIZE,
-                KEEP_ALIVE_TIME,
-                TimeUnit.SECONDS,
-                new LinkedBlockingQueue<>(QUEUE_CAPACITY * 2),
-                marketDataProcessorThreadFactory(),
-                new ThreadPoolExecutor.DiscardOldestPolicy()
-        );
+        return new ThreadPoolExecutor(CORE_POOL_SIZE, MAX_POOL_SIZE, KEEP_ALIVE_TIME, TimeUnit.SECONDS, new LinkedBlockingQueue<>(QUEUE_CAPACITY * 2), marketDataProcessorThreadFactory(), new ThreadPoolExecutor.DiscardOldestPolicy());
     }
 
     // ==================== 交易执行路径线程池 ====================
@@ -131,14 +117,8 @@ public class ThreadConfig {
     @Bean("tradingExecutorService")
     public ExecutorService tradingExecutorService() {
         int poolSize = 4; // 预留4个交易所的交易线程
-        return new ThreadPoolExecutor(
-                poolSize,
-                poolSize,
-                0L,
-                TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>(256), // 小队列,快速失败
-                tradingThreadFactory(),
-                new ThreadPoolExecutor.AbortPolicy() // 拒绝策略:抛出异常,绝不丢弃交易指令
+        return new ThreadPoolExecutor(poolSize, poolSize, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(256), // 小队列,快速失败
+                tradingThreadFactory(), new ThreadPoolExecutor.AbortPolicy() // 拒绝策略:抛出异常,绝不丢弃交易指令
         );
     }
 
@@ -170,14 +150,7 @@ public class ThreadConfig {
      */
     @Bean("strategyExecutorService")
     public ExecutorService strategyExecutorService() {
-        return new ThreadPoolExecutor(
-                CORE_POOL_SIZE,
-                MAX_POOL_SIZE,
-                KEEP_ALIVE_TIME,
-                TimeUnit.SECONDS,
-                new LinkedBlockingQueue<>(QUEUE_CAPACITY),
-                strategyThreadFactory(),
-                new ThreadPoolExecutor.CallerRunsPolicy() // 调用者运行策略,防止任务丢失
+        return new ThreadPoolExecutor(CORE_POOL_SIZE, MAX_POOL_SIZE, KEEP_ALIVE_TIME, TimeUnit.SECONDS, new LinkedBlockingQueue<>(QUEUE_CAPACITY), strategyThreadFactory(), new ThreadPoolExecutor.CallerRunsPolicy() // 调用者运行策略,防止任务丢失
         );
     }
 
@@ -230,15 +203,7 @@ public class ThreadConfig {
         // Java 21+ 推荐使用虚拟线程
         // return Executors.newVirtualThreadPerTaskExecutor();
 
-        return new ThreadPoolExecutor(
-                CORE_POOL_SIZE,
-                Integer.MAX_VALUE,
-                60L,
-                TimeUnit.SECONDS,
-                new java.util.concurrent.SynchronousQueue<>(),
-                ioThreadFactory(),
-                new ThreadPoolExecutor.CallerRunsPolicy()
-        );
+        return new ThreadPoolExecutor(CORE_POOL_SIZE, Integer.MAX_VALUE, 60L, TimeUnit.SECONDS, new java.util.concurrent.SynchronousQueue<>(), ioThreadFactory(), new ThreadPoolExecutor.CallerRunsPolicy());
     }
 
     /**
@@ -246,10 +211,7 @@ public class ThreadConfig {
      */
     @Bean("timerExecutorService")
     public ExecutorService timerExecutorService() {
-        return Executors.newScheduledThreadPool(
-                4,
-                timerThreadFactory()
-        );
+        return Executors.newScheduledThreadPool(4, timerThreadFactory());
     }
 
     /**
@@ -259,4 +221,16 @@ public class ThreadConfig {
     public ExecutorService singleThreadExecutorService() {
         return Executors.newSingleThreadExecutor(ioThreadFactory());
     }
+
+    @Bean("wsExecutorService")
+    public ExecutorService wsExecutorService() {
+        return Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "BN-MDGW-WS-Thread");
+            t.setDaemon(true);
+            return t;
+        });
+
+    }
 }
+
+

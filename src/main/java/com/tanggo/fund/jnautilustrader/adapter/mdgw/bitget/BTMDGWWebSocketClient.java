@@ -138,7 +138,7 @@ public class BTMDGWWebSocketClient implements Actor {
     }
 
     @Override
-    public void start() {
+    public void start_link() {
         connect();
 
     }

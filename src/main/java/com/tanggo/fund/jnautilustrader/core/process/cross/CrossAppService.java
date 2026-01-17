@@ -30,9 +30,9 @@ import java.util.concurrent.TimeUnit;
  */
 
 @Data
-public class CrossStrategy implements Actor {
+public class CrossAppService implements Actor {
 
-    private static final Logger logger = LoggerFactory.getLogger(CrossStrategy.class);
+    private static final Logger logger = LoggerFactory.getLogger(CrossAppService.class);
 
     // 策略参数
     private CrossArbitrageParams params;
@@ -69,7 +69,7 @@ public class CrossStrategy implements Actor {
      * 启动策略
      */
     @Override
-    public void start() {
+    public void start_link() {
         state.start();
 
         logger.info("跨币安和Bitget现货BTC套利策略启动成功");
