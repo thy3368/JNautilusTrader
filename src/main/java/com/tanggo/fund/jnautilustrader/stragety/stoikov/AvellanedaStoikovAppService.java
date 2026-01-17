@@ -2,7 +2,7 @@ package com.tanggo.fund.jnautilustrader.stragety.stoikov;
 
 import com.tanggo.fund.jnautilustrader.core.entity.*;
 import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDelta;
-import com.tanggo.fund.jnautilustrader.core.entity.data.PlaceOrder;
+import com.tanggo.fund.jnautilustrader.core.entity.trade.PlaceOrder;
 import com.tanggo.fund.jnautilustrader.core.entity.data.TradeTick;
 
 import java.util.concurrent.TimeUnit;

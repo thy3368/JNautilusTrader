@@ -8,7 +8,7 @@ import com.tanggo.fund.jnautilustrader.core.entity.Actor;
 import com.tanggo.fund.jnautilustrader.core.entity.Event;
 import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
 import com.tanggo.fund.jnautilustrader.core.entity.TradeCmd;
-import com.tanggo.fund.jnautilustrader.core.entity.data.PlaceOrder;
+import com.tanggo.fund.jnautilustrader.core.entity.trade.PlaceOrder;
 import com.tanggo.fund.jnautilustrader.core.entity.data.TradeTick;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

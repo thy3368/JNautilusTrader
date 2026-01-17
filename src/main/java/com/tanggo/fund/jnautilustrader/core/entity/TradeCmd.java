@@ -1,6 +1,6 @@
 package com.tanggo.fund.jnautilustrader.core.entity;
 
-import com.tanggo.fund.jnautilustrader.core.entity.data.PlaceOrder;
+import com.tanggo.fund.jnautilustrader.core.entity.trade.PlaceOrder;
 
 /**
  * 交易命令枚举
