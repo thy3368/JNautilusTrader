@@ -8,6 +8,7 @@
         </encoder>
     </appender>
 
+    //todo 日志里带线程信息
     <!-- 应用程序日志级别设置为DEBUG -->
     <logger name="com.tanggo.fund.jnautilustrader" level="DEBUG"/>
 

@@ -1,6 +1,6 @@
 package com.tanggo.fund.jnautilustrader.core.stragety;
 
-import com.tanggo.fund.jnautilustrader.adapter.event_repo.BlockingQueueEventRepo;
+import com.tanggo.fund.jnautilustrader.adapter.event_repo.event.BlockingQueueEventRepo;
 import com.tanggo.fund.jnautilustrader.adapter.mdgw.bitget.BTMDGWWebSocketClient;
 import com.tanggo.fund.jnautilustrader.core.entity.Actor;
 import com.tanggo.fund.jnautilustrader.core.entity.MarketData;

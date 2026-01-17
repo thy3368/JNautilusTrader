@@ -2,12 +2,11 @@ package com.tanggo.fund.jnautilustrader.adapter.mdgw.bn;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.tanggo.fund.jnautilustrader.adapter.event_repo.BlockingQueueEventRepo;
+import com.tanggo.fund.jnautilustrader.adapter.event_repo.event.BlockingQueueEventRepo;
 import com.tanggo.fund.jnautilustrader.core.entity.Actor;
 import com.tanggo.fund.jnautilustrader.core.entity.Event;
 import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
 import com.tanggo.fund.jnautilustrader.core.entity.data.*;
-import com.tanggo.fund.jnautilustrader.core.util.ThreadLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,7 +57,7 @@ public class BNMDGWWebSocketClient implements Actor {
      */
     private void connect() {
         if (webSocket != null) {
-            ThreadLogger.warn(logger, "WebSocket connection already established");
+            logger.warn("WebSocket connection already established");
             return;
         }
 
@@ -73,11 +72,11 @@ public class BNMDGWWebSocketClient implements Actor {
 
             webSocket = httpClient.newWebSocketBuilder().connectTimeout(java.time.Duration.ofSeconds(10)).buildAsync(uri, new WebSocketListener()).join();
 
-            ThreadLogger.info(logger, "Connected to Binance WebSocket: {}", BINANCE_WS_URL);
+            logger.info("Connected to Binance WebSocket: {}", BINANCE_WS_URL);
         } catch (URISyntaxException e) {
-            ThreadLogger.error(logger, "Invalid Binance WebSocket URL: {}", e.getMessage(), e);
+            logger.error("Invalid Binance WebSocket URL: {}", e.getMessage(), e);
         } catch (Exception e) {
-            ThreadLogger.error(logger, "Failed to connect to Binance WebSocket: {}", e.getMessage(), e);
+            logger.error("Failed to connect to Binance WebSocket: {}", e.getMessage(), e);
             scheduleReconnect();
         }
     }
@@ -98,9 +97,9 @@ public class BNMDGWWebSocketClient implements Actor {
         if (webSocket != null) {
             try {
                 webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Shutdown").join();
-                ThreadLogger.info(logger, "Binance WebSocket connection closed");
+                logger.info("Binance WebSocket connection closed");
             } catch (Exception e) {
-                ThreadLogger.error(logger, "Failed to close Binance WebSocket connection: {}", e.getMessage(), e);
+                logger.error("Failed to close Binance WebSocket connection: {}", e.getMessage(), e);
             }
         }
     }
@@ -114,10 +113,10 @@ public class BNMDGWWebSocketClient implements Actor {
         }
 
         reconnecting = true;
-        ThreadLogger.info(logger, "Scheduling reconnection in {} seconds", RECONNECT_DELAY);
+        logger.info("Scheduling reconnection in {} seconds", RECONNECT_DELAY);
         timerExecutorService.schedule(() -> {
             reconnecting = false;
-            ThreadLogger.info(logger, "Attempting to reconnect to Binance WebSocket");
+            logger.info("Attempting to reconnect to Binance WebSocket");
             connect();
         }, RECONNECT_DELAY, TimeUnit.SECONDS);
     }
@@ -146,7 +145,7 @@ public class BNMDGWWebSocketClient implements Actor {
             String streamName = rootNode.path("stream").asText();
             JsonNode dataNode = rootNode.path("data");
 
-            ThreadLogger.debug(logger, "Stream name: '{}', contains @depth10: {}, contains @bookTicker: {}",
+            logger.debug("Stream name: '{}', contains @depth10: {}, contains @bookTicker: {}",
                 streamName,
                 streamName.contains("@depth10"),
                 streamName.contains("@bookTicker"));
@@ -154,13 +153,13 @@ public class BNMDGWWebSocketClient implements Actor {
             // 某些流没有事件类型字段,需要通过stream名称识别
             // depth10@100ms: 订单簿快照流
             if (streamName.contains("@depth10")) {
-                ThreadLogger.debug(logger, "Processing depth10 snapshot: {}", dataNode.toString());
+                logger.debug("Processing depth10 snapshot: {}", dataNode.toString());
                 return parseOrderBookDepth(dataNode.toString());
             }
 
             // bookTicker: 最优买卖价流(无事件类型字段)
             if (streamName.contains("@bookTicker")) {
-                ThreadLogger.debug(logger, "Processing bookTicker: {}", dataNode.toString());
+                logger.debug("Processing bookTicker: {}", dataNode.toString());
                 return parseBookTicker(dataNode.toString());
             }
 
@@ -185,7 +184,7 @@ public class BNMDGWWebSocketClient implements Actor {
                 case "fundingRate":
                     return parseFundingRateUpdate(dataNode.toString());
                 default:
-                    ThreadLogger.debug(logger, "Received unsupported event type: {}, stream: {}", eventType, streamName);
+                    logger.debug("Received unsupported event type: {}, stream: {}", eventType, streamName);
                     return null;
             }
         } else {
@@ -213,7 +212,7 @@ public class BNMDGWWebSocketClient implements Actor {
                 case "bookTicker":
                     return parseBookTicker(message);
                 default:
-                    ThreadLogger.debug(logger, "Received unsupported event type: {}", eventType);
+                    logger.debug("Received unsupported event type: {}", eventType);
                     return null;
             }
         }
@@ -433,7 +432,7 @@ public class BNMDGWWebSocketClient implements Actor {
 
         @Override
         public void onOpen(WebSocket webSocket) {
-            ThreadLogger.info(logger, "Binance WebSocket connection opened");
+            logger.info("Binance WebSocket connection opened");
             // 请求更多数据
             webSocket.request(1);
         }
@@ -441,7 +440,7 @@ public class BNMDGWWebSocketClient implements Actor {
         @Override
         public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
             String message = data.toString();
-            ThreadLogger.debug(logger, "Received Binance WebSocket message fragment: {}", message);
+            logger.debug("Received Binance WebSocket message fragment: {}", message);
 
             try {
                 // 累积消息片段
@@ -450,7 +449,7 @@ public class BNMDGWWebSocketClient implements Actor {
                 // 如果是完整消息，处理它
                 if (last) {
                     String completeMessage = messageBuffer.toString();
-                    ThreadLogger.debug(logger, "Received complete Binance WebSocket message: {}", completeMessage);
+                    logger.debug("Received complete Binance WebSocket message: {}", completeMessage);
 
                     // 解析币安WebSocket消息
                     Object parsedMessage = parseMessage(completeMessage);
@@ -461,14 +460,14 @@ public class BNMDGWWebSocketClient implements Actor {
                         event.type = determineEventType(parsedMessage);
                         event.payload = marketData;
                         mdEventRepo.send(event);
-//                        ThreadLogger.info(logger, "Sent market data event: {}", event.type);
+//                        logger.info("Sent market data event: {}", event.type);
                     }
 
                     // 清空缓冲区
                     messageBuffer.setLength(0);
                 }
             } catch (Exception e) {
-                ThreadLogger.error(logger, "Failed to process Binance WebSocket message: {}", e.getMessage(), e);
+                logger.error("Failed to process Binance WebSocket message: {}", e.getMessage(), e);
                 // 清空缓冲区以防止后续消息解析错误
                 messageBuffer.setLength(0);
             }
@@ -480,7 +479,7 @@ public class BNMDGWWebSocketClient implements Actor {
 
         @Override
         public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-            ThreadLogger.info(logger, "Binance WebSocket connection closed: status={}, reason={}", statusCode, reason);
+            logger.info("Binance WebSocket connection closed: status={}, reason={}", statusCode, reason);
             BNMDGWWebSocketClient.this.webSocket = null;
             // 自动重连
             scheduleReconnect();
@@ -489,7 +488,7 @@ public class BNMDGWWebSocketClient implements Actor {
 
         @Override
         public void onError(WebSocket webSocket, Throwable error) {
-            ThreadLogger.error(logger, "Binance WebSocket error: {}", error.getMessage(), error);
+            logger.error("Binance WebSocket error: {}", error.getMessage(), error);
         }
     }
 }

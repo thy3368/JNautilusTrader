@@ -2,7 +2,7 @@ package com.tanggo.fund.jnautilustrader.adapter.mdgw.bitget;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.tanggo.fund.jnautilustrader.adapter.event_repo.BlockingQueueEventRepo;
+import com.tanggo.fund.jnautilustrader.adapter.event_repo.event.BlockingQueueEventRepo;
 import com.tanggo.fund.jnautilustrader.core.entity.Actor;
 import com.tanggo.fund.jnautilustrader.core.entity.Event;
 import com.tanggo.fund.jnautilustrader.core.entity.MarketData;

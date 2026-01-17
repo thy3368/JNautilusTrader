@@ -1,12 +1,12 @@
 package com.tanggo.fund.jnautilustrader.stragety.cross;
 
-import com.tanggo.fund.jnautilustrader.adapter.event_repo.HashMapEventHandlerRepo;
+import com.tanggo.fund.jnautilustrader.adapter.event_repo.handler.HashMapEventHandlerRepo;
 import com.tanggo.fund.jnautilustrader.core.entity.*;
 import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDelta;
 import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDeltas;
 import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDepth10;
-import com.tanggo.fund.jnautilustrader.core.entity.trade.PlaceOrder;
 import com.tanggo.fund.jnautilustrader.core.entity.data.TradeTick;
+import com.tanggo.fund.jnautilustrader.core.entity.trade.PlaceOrder;
 import lombok.Data;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,7 +33,7 @@ import java.util.concurrent.TimeUnit;
  */
 
 @Data
-public class CrossAppService implements Actor {
+public class CrossAppService implements UseCase {
 
     private static final Logger logger = LoggerFactory.getLogger(CrossAppService.class);
 
@@ -51,9 +51,6 @@ public class CrossAppService implements Actor {
 
     // 用于跟踪提交的任务
     private Future<?> mainTaskFuture;
-
-    // 最后一次策略执行时间戳（纳秒）
-    private volatile long lastStrategyExecutionTime = 0;
 
 
     /**
@@ -90,8 +87,7 @@ public class CrossAppService implements Actor {
             logger.info("跨币安和Bitget现货BTC套利策略启动成功（单线程事件驱动模式）");
             logger.info("策略参数: {}", params);
 
-            logger.debug("开始策略主循环 - state.isRunning()={}, currentTime={}, runTime={}",
-                    state.isRunning(), state.getCurrentTime(), params.getRunTime());
+            logger.debug("开始策略主循环 - state.isRunning()={}, currentTime={}, runTime={}", state.isRunning(), state.getCurrentTime(), params.getRunTime());
 
             try {
                 int loopCount = 0;
@@ -105,8 +101,7 @@ public class CrossAppService implements Actor {
 
                         // 每1000次循环记录一次状态
                         if (loopCount % 1000 == 0) {
-                            logger.debug("主循环状态 - 循环次数: {}, 接收事件: {}, 处理事件: {}, 执行策略: {}",
-                                    loopCount, eventReceivedCount, eventHandledCount, strategyExecutedCount);
+                            logger.debug("主循环状态 - 循环次数: {}, 接收事件: {}, 处理事件: {}, 执行策略: {}", loopCount, eventReceivedCount, eventHandledCount, strategyExecutedCount);
                         }
 
                         // 1. 接收市场数据事件（非阻塞模式，超时10ms）
@@ -114,10 +109,7 @@ public class CrossAppService implements Actor {
 
                         if (event != null) {
                             eventReceivedCount++;
-                            logger.debug("收到事件 #{} - 类型: {}, payload类型: {}",
-                                    eventReceivedCount,
-                                    event.type,
-                                    event.payload != null ? event.payload.getClass().getSimpleName() : "null");
+                            logger.debug("收到事件 #{} - 类型: {}, payload类型: {}", eventReceivedCount, event.type, event.payload != null ? event.payload.getClass().getSimpleName() : "null");
 
                             // 2. 处理事件并更新状态
                             EventHandler<MarketData> handler = eventHandlerRepo.queryBy(event.type);
@@ -131,17 +123,16 @@ public class CrossAppService implements Actor {
                                 // 使用纳秒级精度时间戳控制执行频率
                                 long currentTimeNanos = System.nanoTime();
                                 long intervalNanos = params.getCheckInterval() * 1_000_000L; // 转换为纳秒
-                                long timeSinceLastExecution = currentTimeNanos - lastStrategyExecutionTime;
+                                long timeSinceLastExecution = currentTimeNanos - state.getLastStrategyExecutionTime();
 
-                                logger.debug("策略执行间隔检查 - 距上次: {}ns, 要求间隔: {}ns, 是否执行: {}",
-                                        timeSinceLastExecution, intervalNanos, timeSinceLastExecution >= intervalNanos);
+                                logger.debug("策略执行间隔检查 - 距上次: {}ns, 要求间隔: {}ns, 是否执行: {}", timeSinceLastExecution, intervalNanos, timeSinceLastExecution >= intervalNanos);
 
-                                if (currentTimeNanos - lastStrategyExecutionTime >= intervalNanos) {
+                                if (currentTimeNanos - state.getLastStrategyExecutionTime() >= intervalNanos) {
                                     logger.debug("开始执行策略 - 更新状态并执行");
                                     state.updateState();
                                     executeStrategy();
                                     strategyExecutedCount++;
-                                    lastStrategyExecutionTime = currentTimeNanos;
+                                    state.setLastStrategyExecutionTime(currentTimeNanos);
                                     logger.debug("策略执行完成 #{}", strategyExecutedCount);
                                 } else {
                                     logger.debug("跳过策略执行 - 时间间隔未到");
@@ -233,9 +224,7 @@ public class CrossAppService implements Actor {
     //todo 检查一下 策略为什么没有触发 也没看到日志
     private void executeStrategy() {
         logger.debug("执行策略检查 - 开始");
-        logger.debug("市场数据状态: Binance买价={}, Binance卖价={}, Binance中间价={}, Bitget买价={}, Bitget卖价={}, Bitget中间价={}",
-                state.getBinanceBidPrice(), state.getBinanceAskPrice(), state.getBinanceMidPrice(),
-                state.getBitgetBidPrice(), state.getBitgetAskPrice(), state.getBitgetMidPrice());
+        logger.debug("市场数据状态: Binance买价={}, Binance卖价={}, Binance中间价={}, Bitget买价={}, Bitget卖价={}, Bitget中间价={}", state.getBinanceBidPrice(), state.getBinanceAskPrice(), state.getBinanceMidPrice(), state.getBitgetBidPrice(), state.getBitgetAskPrice(), state.getBitgetMidPrice());
 
         // 检查是否有有效的市场数据和是否可以进行套利
         if (!state.canArbitrage(1000)) { // 1秒内只能套利一次
@@ -417,8 +406,7 @@ public class CrossAppService implements Actor {
                     logger.debug("币安最新成交价: {}", String.format("%.2f", tradeTick.price));
                 }
             } else {
-                logger.warn("MarketData.getMessage() 不是 TradeTick 类型: {}",
-                        marketData.getMessage() != null ? marketData.getMessage().getClass().getName() : "null");
+                logger.warn("MarketData.getMessage() 不是 TradeTick 类型: {}", marketData.getMessage() != null ? marketData.getMessage().getClass().getName() : "null");
             }
             logger.debug("BinanceTradeTickEventHandler.handle() 完成");
         }
@@ -506,9 +494,7 @@ public class CrossAppService implements Actor {
             logger.debug("收到Bitget订单簿深度事件");
             MarketData marketData = event.payload;
             if (marketData.getMessage() instanceof OrderBookDepth10 orderBook) {
-                logger.debug("Bitget订单簿数据: bids.size={}, asks.size={}",
-                        orderBook.getBids() != null ? orderBook.getBids().size() : 0,
-                        orderBook.getAsks() != null ? orderBook.getAsks().size() : 0);
+                logger.debug("Bitget订单簿数据: bids.size={}, asks.size={}", orderBook.getBids() != null ? orderBook.getBids().size() : 0, orderBook.getAsks() != null ? orderBook.getAsks().size() : 0);
 
                 // 提取最佳买卖价
                 if (orderBook.getBids() != null && !orderBook.getBids().isEmpty()) {

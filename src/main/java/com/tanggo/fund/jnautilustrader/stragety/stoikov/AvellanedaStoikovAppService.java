@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit;
  * @version 1.0
  */
 
-public class AvellanedaStoikovAppService implements Actor {
+public class AvellanedaStoikovAppService implements UseCase {
 
     // 策略参数 todo可以repo
     private final AvellanedaStoikovParams params;

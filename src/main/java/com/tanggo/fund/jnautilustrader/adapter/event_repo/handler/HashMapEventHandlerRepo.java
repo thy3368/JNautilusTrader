@@ -1,8 +1,7 @@
-package com.tanggo.fund.jnautilustrader.adapter.event_repo;
+package com.tanggo.fund.jnautilustrader.adapter.event_repo.handler;
 
 import com.tanggo.fund.jnautilustrader.core.entity.EventHandler;
 import com.tanggo.fund.jnautilustrader.core.entity.EventHandlerRepo;
-import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
 import java.util.Map;

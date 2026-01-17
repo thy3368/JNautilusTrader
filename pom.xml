@@ -110,6 +110,12 @@
             <artifactId>jackson-dataformat-avro</artifactId>
             <version>2.15.2</version>
         </dependency>
+        <!-- LMAX Disruptor - 高性能事件处理框架 -->
+        <dependency>
+            <groupId>com.lmax</groupId>
+            <artifactId>disruptor</artifactId>
+            <version>3.4.4</version>
+        </dependency>
     </dependencies>
 
     <build>

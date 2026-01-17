@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn test:*)",
+      "Bash(./mvnw compile)",
+      "Bash(mvn compile:*)",
+      "Bash(curl:*)",
+      "Bash(nc:*)",
+      "Bash(ping:*)",
+      "Bash(nslookup:*)",
+      "Bash(mvn clean install:*)",
+      "Bash(mvn exec:java:*)",
+      "Bash(tree:*)"
+    ]
+  }
+}

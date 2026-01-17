@@ -36,17 +36,17 @@
     <!-- ==================== CrossStrategyConfig - 跨交易所策略配置 ==================== -->
 
     <!-- 市场数据事件仓库 -->
-    <bean id="marketDataEventRepo" class="com.tanggo.fund.jnautilustrader.adapter.event_repo.BlockingQueueEventRepo">
+    <bean id="marketDataEventRepo" class="com.tanggo.fund.jnautilustrader.adapter.event_repo.event.BlockingQueueEventRepo">
         <!-- 类型参数通过构造函数或setter注入，这里使用无参构造 -->
     </bean>
 
     <!-- 交易指令事件仓库 -->
-    <bean id="tradeCmdEventRepo" class="com.tanggo.fund.jnautilustrader.adapter.event_repo.BlockingQueueEventRepo">
+    <bean id="tradeCmdEventRepo" class="com.tanggo.fund.jnautilustrader.adapter.event_repo.event.BlockingQueueEventRepo">
         <!-- 类型参数通过构造函数或setter注入，这里使用无参构造 -->
     </bean>
 
     <!-- 事件处理器仓库 -->
-    <bean id="eventHandlerRepo" class="com.tanggo.fund.jnautilustrader.adapter.event_repo.HashMapEventHandlerRepo"/>
+    <bean id="eventHandlerRepo" class="com.tanggo.fund.jnautilustrader.adapter.event_repo.handler.HashMapEventHandlerRepo"/>
 
     <!-- 跨交易所套利参数 -->
     <bean id="crossArbitrageParams" class="com.tanggo.fund.jnautilustrader.stragety.cross.CrossArbitrageParams"

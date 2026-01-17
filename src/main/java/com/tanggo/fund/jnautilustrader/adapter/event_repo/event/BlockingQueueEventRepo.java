@@ -1,8 +1,7 @@
-package com.tanggo.fund.jnautilustrader.adapter.event_repo;
+package com.tanggo.fund.jnautilustrader.adapter.event_repo.event;
 
 import com.tanggo.fund.jnautilustrader.core.entity.Event;
 import com.tanggo.fund.jnautilustrader.core.entity.EventRepo;
-import org.springframework.stereotype.Component;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;

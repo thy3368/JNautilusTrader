@@ -1,6 +1,6 @@
 package com.tanggo.fund.jnautilustrader.stragety.cross;
 
-import com.tanggo.fund.jnautilustrader.adapter.event_repo.HashMapEventHandlerRepo;
+import com.tanggo.fund.jnautilustrader.adapter.event_repo.handler.HashMapEventHandlerRepo;
 import com.tanggo.fund.jnautilustrader.core.entity.*;
 import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDepth10;
 import com.tanggo.fund.jnautilustrader.core.entity.trade.PlaceOrder;
@@ -31,7 +31,7 @@ import java.util.concurrent.TimeUnit;
  */
 
 @Data
-public class CrossAppService2 implements Actor {
+public class CrossAppService2 implements UseCase {
 
     private static final Logger logger = LoggerFactory.getLogger(CrossAppService2.class);
 
@@ -73,7 +73,7 @@ public class CrossAppService2 implements Actor {
     @Override
     public void start_link() {
 
-        //todo 事件处理和策略执行放到同线程
+        //todo 事件处理和策略执行放到不同线程 线程安全问题
         // 启动事件处理线程
         if (eventExecutorService != null) {
             eventTaskFuture = eventExecutorService.submit(() -> {

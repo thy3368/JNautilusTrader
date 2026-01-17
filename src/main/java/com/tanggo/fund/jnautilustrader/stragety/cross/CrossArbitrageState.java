@@ -12,6 +12,9 @@ import lombok.Data;
 @Data
 public class CrossArbitrageState {
 
+    // 最后一次策略执行时间戳（纳秒）
+    private long lastStrategyExecutionTime = 0;
+
     /**
      * 策略是否运行
      */
@@ -126,6 +129,8 @@ public class CrossArbitrageState {
      * 策略状态信息字符串
      */
     private String statusInfo;
+    // 策略参数
+    private CrossArbitrageParams params;
 
     /**
      * 构造函数 - 接受策略参数
@@ -199,9 +204,6 @@ public class CrossArbitrageState {
     public void setParams(CrossArbitrageParams params) {
         this.params = params;
     }
-
-    // 策略参数
-    private CrossArbitrageParams params;
 
     /**
      * 启动策略状态
@@ -285,19 +287,6 @@ public class CrossArbitrageState {
 
     @Override
     public String toString() {
-        return "CrossArbitrageState{" +
-                "isRunning=" + isRunning +
-                ", currentTime=" + String.format("%.2f", currentTime) + "s" +
-                ", binanceMidPrice=" + String.format("%.2f", binanceMidPrice) +
-                ", bitgetMidPrice=" + String.format("%.2f", bitgetMidPrice) +
-                ", spread=" + String.format("%.4f", lastSpreadPercentage) + "%" +
-                ", arbitrageCount=" + arbitrageCount +
-                ", successfulArbitrageCount=" + successfulArbitrageCount +
-                ", failedArbitrageCount=" + failedArbitrageCount +
-                ", totalProfit=" + String.format("%.4f", totalProfit) + " USDT" +
-                ", currentPosition=" + String.format("%.6f", currentPosition) + " BTC" +
-                ", totalVolume=" + String.format("%.4f", totalVolume) + " BTC" +
-                ", status='" + statusInfo + '\'' +
-                '}';
+        return "CrossArbitrageState{" + "isRunning=" + isRunning + ", currentTime=" + String.format("%.2f", currentTime) + "s" + ", binanceMidPrice=" + String.format("%.2f", binanceMidPrice) + ", bitgetMidPrice=" + String.format("%.2f", bitgetMidPrice) + ", spread=" + String.format("%.4f", lastSpreadPercentage) + "%" + ", arbitrageCount=" + arbitrageCount + ", successfulArbitrageCount=" + successfulArbitrageCount + ", failedArbitrageCount=" + failedArbitrageCount + ", totalProfit=" + String.format("%.4f", totalProfit) + " USDT" + ", currentPosition=" + String.format("%.6f", currentPosition) + " BTC" + ", totalVolume=" + String.format("%.4f", totalVolume) + " BTC" + ", status='" + statusInfo + '\'' + '}';
     }
 }
