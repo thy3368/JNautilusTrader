@@ -145,14 +145,27 @@ public class BNMDGWWebSocketClient implements Actor {
         if (rootNode.has("stream") && rootNode.has("data")) {
             String streamName = rootNode.path("stream").asText();
             JsonNode dataNode = rootNode.path("data");
-            String eventType = dataNode.path("e").asText();
 
-            // depth10@100ms流没有事件类型字段,需要通过stream名称识别
+            ThreadLogger.debug(logger, "Stream name: '{}', contains @depth10: {}, contains @bookTicker: {}",
+                streamName,
+                streamName.contains("@depth10"),
+                streamName.contains("@bookTicker"));
+
+            // 某些流没有事件类型字段,需要通过stream名称识别
+            // depth10@100ms: 订单簿快照流
             if (streamName.contains("@depth10")) {
                 ThreadLogger.debug(logger, "Processing depth10 snapshot: {}", dataNode.toString());
                 return parseOrderBookDepth(dataNode.toString());
             }
 
+            // bookTicker: 最优买卖价流(无事件类型字段)
+            if (streamName.contains("@bookTicker")) {
+                ThreadLogger.debug(logger, "Processing bookTicker: {}", dataNode.toString());
+                return parseBookTicker(dataNode.toString());
+            }
+
+            // 其他流都有事件类型字段
+            String eventType = dataNode.path("e").asText();
             switch (eventType) {
                 case "trade":
                     return parseTradeTick(dataNode.toString());
@@ -171,8 +184,6 @@ public class BNMDGWWebSocketClient implements Actor {
                     return parseIndexPriceUpdate(dataNode.toString());
                 case "fundingRate":
                     return parseFundingRateUpdate(dataNode.toString());
-                case "bookTicker":
-                    return parseBookTicker(dataNode.toString());
                 default:
                     ThreadLogger.debug(logger, "Received unsupported event type: {}, stream: {}", eventType, streamName);
                     return null;

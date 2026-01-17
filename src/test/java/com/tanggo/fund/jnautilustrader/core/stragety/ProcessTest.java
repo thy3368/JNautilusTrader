@@ -1,4 +1,4 @@
-package com.tanggo.fund.jnautilustrader.core.process;
+package com.tanggo.fund.jnautilustrader.core.stragety;
 
 import com.tanggo.fund.jnautilustrader.core.entity.Actor;
 import com.tanggo.fund.jnautilustrader.core.entity.EventHandlerRepo;

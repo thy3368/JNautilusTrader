@@ -1,4 +1,4 @@
-package com.tanggo.fund.jnautilustrader.core.process.cross;
+package com.tanggo.fund.jnautilustrader.stragety.cross;
 
 import lombok.Data;
 

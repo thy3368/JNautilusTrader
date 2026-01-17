@@ -1,4 +1,4 @@
-package com.tanggo.fund.jnautilustrader.core.process;
+package com.tanggo.fund.jnautilustrader.core.stragety;
 
 import com.tanggo.fund.jnautilustrader.adapter.event_repo.BlockingQueueEventRepo;
 import com.tanggo.fund.jnautilustrader.adapter.mdgw.bitget.BTMDGWWebSocketClient;

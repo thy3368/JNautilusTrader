@@ -1,4 +1,4 @@
-package com.tanggo.fund.jnautilustrader.core.process;
+package com.tanggo.fund.jnautilustrader.core.stragety;
 
 import com.tanggo.fund.jnautilustrader.adapter.event_repo.BlockingQueueEventRepo;
 import com.tanggo.fund.jnautilustrader.adapter.mdgw.bn.BNMDGWWebSocketClient;
@@ -6,7 +6,7 @@ import com.tanggo.fund.jnautilustrader.adapter.tradegw.bn.BNTradeGWWebSocketClie
 import com.tanggo.fund.jnautilustrader.core.entity.Actor;
 import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
 import com.tanggo.fund.jnautilustrader.core.entity.TradeCmd;
-import com.tanggo.fund.jnautilustrader.core.process.stoikov.AvellanedaStoikovAppService;
+import com.tanggo.fund.jnautilustrader.stragety.stoikov.AvellanedaStoikovAppService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;

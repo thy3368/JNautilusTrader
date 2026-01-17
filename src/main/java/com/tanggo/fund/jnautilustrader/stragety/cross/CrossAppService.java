@@ -1,7 +1,9 @@
-package com.tanggo.fund.jnautilustrader.core.process.cross;
+package com.tanggo.fund.jnautilustrader.stragety.cross;
 
 import com.tanggo.fund.jnautilustrader.adapter.event_repo.HashMapEventHandlerRepo;
 import com.tanggo.fund.jnautilustrader.core.entity.*;
+import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDelta;
+import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDeltas;
 import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDepth10;
 import com.tanggo.fund.jnautilustrader.core.entity.data.PlaceOrder;
 import com.tanggo.fund.jnautilustrader.core.entity.data.TradeTick;
@@ -31,9 +33,9 @@ import java.util.concurrent.TimeUnit;
  */
 
 @Data
-public class CrossAppService2 implements Actor {
+public class CrossAppService implements Actor {
 
-    private static final Logger logger = LoggerFactory.getLogger(CrossAppService2.class);
+    private static final Logger logger = LoggerFactory.getLogger(CrossAppService.class);
 
     // 策略参数
     private CrossArbitrageParams params;
@@ -44,13 +46,14 @@ public class CrossAppService2 implements Actor {
     private EventRepo<MarketData> marketDataRepo;
     private EventRepo<TradeCmd> tradeCmdRepo;
     private EventHandlerRepo<MarketData> eventHandlerRepo;
-    // 线程池引用，用于资源清理
-    private ExecutorService strategyExecutorService;
-    private ExecutorService eventExecutorService;
+    // 单线程执行器，用于事件处理和策略执行
+    private ExecutorService singleThreadExecutor;
 
     // 用于跟踪提交的任务
-    private Future<?> eventTaskFuture;
-    private Future<?> strategyTaskFuture;
+    private Future<?> mainTaskFuture;
+
+    // 最后一次策略执行时间戳（纳秒）
+    private volatile long lastStrategyExecutionTime = 0;
 
 
     /**
@@ -61,115 +64,132 @@ public class CrossAppService2 implements Actor {
         eventHandlerRepo = new HashMapEventHandlerRepo<MarketData>();
         eventHandlerRepo.addHandler("BINANCE_TRADE_TICK", new BinanceTradeTickEventHandler());
         eventHandlerRepo.addHandler("BINANCE_ORDER_BOOK_DEPTH", new BinanceOrderBookDepthEventHandler());
+        eventHandlerRepo.addHandler("BINANCE_ORDER_BOOK_DELTA", new BinanceOrderBookDeltaEventHandler());
+        eventHandlerRepo.addHandler("BINANCE_QUOTE_TICK", new BinanceQuoteTickEventHandler());  // bookTicker数据
         eventHandlerRepo.addHandler("BITGET_TRADE_TICK", new BitgetTradeTickEventHandler());
         eventHandlerRepo.addHandler("BITGET_ORDER_BOOK_DEPTH", new BitgetOrderBookDepthEventHandler());
+        eventHandlerRepo.addHandler("BITGET_ORDER_BOOK_DELTA", new BitgetOrderBookDeltaEventHandler());
         logger.info("事件处理器注册完成");
 
     }
 
     /**
-     * 启动策略
+     * 启动策略 - 单线程事件驱动模式
+     * 事件处理和策略执行在同一线程中，事件到达后立即触发策略检查
      */
     @Override
     public void start_link() {
+        if (singleThreadExecutor == null) {
+            logger.error("单线程执行器未初始化");
+            return;
+        }
 
-        //todo 事件处理和策略执行放到同线程
-        // 启动事件处理线程
-        if (eventExecutorService != null) {
-            eventTaskFuture = eventExecutorService.submit(() -> {
-                registerEventHandlers();
-                state.start();
-                logger.info("跨币安和Bitget现货BTC套利策略启动成功");
-                logger.info("策略参数: {}", params);
+        mainTaskFuture = singleThreadExecutor.submit(() -> {
+            registerEventHandlers();
+            state.start();
+            logger.info("跨币安和Bitget现货BTC套利策略启动成功（单线程事件驱动模式）");
+            logger.info("策略参数: {}", params);
 
-                try {
-                    while (state.isRunning()) {
-                        try {
-                            Event<MarketData> event = marketDataRepo.receive();
-                            if (event != null) {
-                                EventHandler<MarketData> handler = eventHandlerRepo.queryBy(event.type);
-                                if (handler != null) {
-                                    handler.handle(event);
+            logger.debug("开始策略主循环 - state.isRunning()={}, currentTime={}, runTime={}",
+                    state.isRunning(), state.getCurrentTime(), params.getRunTime());
+
+            try {
+                int loopCount = 0;
+                int eventReceivedCount = 0;
+                int eventHandledCount = 0;
+                int strategyExecutedCount = 0;
+
+                while (state.isRunning() && state.getCurrentTime() < params.getRunTime()) {
+                    try {
+                        loopCount++;
+
+                        // 每1000次循环记录一次状态
+                        if (loopCount % 1000 == 0) {
+                            logger.debug("主循环状态 - 循环次数: {}, 接收事件: {}, 处理事件: {}, 执行策略: {}",
+                                    loopCount, eventReceivedCount, eventHandledCount, strategyExecutedCount);
+                        }
+
+                        // 1. 接收市场数据事件（非阻塞模式，超时10ms）
+                        Event<MarketData> event = marketDataRepo.receive();
+
+                        if (event != null) {
+                            eventReceivedCount++;
+                            logger.debug("收到事件 #{} - 类型: {}, payload类型: {}",
+                                    eventReceivedCount,
+                                    event.type,
+                                    event.payload != null ? event.payload.getClass().getSimpleName() : "null");
+
+                            // 2. 处理事件并更新状态
+                            EventHandler<MarketData> handler = eventHandlerRepo.queryBy(event.type);
+                            if (handler != null) {
+                                logger.debug("找到事件处理器: {} -> {}", event.type, handler.getClass().getSimpleName());
+                                handler.handle(event);
+                                eventHandledCount++;
+                                logger.debug("事件处理完成 #{}", eventHandledCount);
+
+                                // 3. 事件处理后立即尝试执行策略（事件驱动）
+                                // 使用纳秒级精度时间戳控制执行频率
+                                long currentTimeNanos = System.nanoTime();
+                                long intervalNanos = params.getCheckInterval() * 1_000_000L; // 转换为纳秒
+                                long timeSinceLastExecution = currentTimeNanos - lastStrategyExecutionTime;
+
+                                logger.debug("策略执行间隔检查 - 距上次: {}ns, 要求间隔: {}ns, 是否执行: {}",
+                                        timeSinceLastExecution, intervalNanos, timeSinceLastExecution >= intervalNanos);
+
+                                if (currentTimeNanos - lastStrategyExecutionTime >= intervalNanos) {
+                                    logger.debug("开始执行策略 - 更新状态并执行");
+                                    state.updateState();
+                                    executeStrategy();
+                                    strategyExecutedCount++;
+                                    lastStrategyExecutionTime = currentTimeNanos;
+                                    logger.debug("策略执行完成 #{}", strategyExecutedCount);
                                 } else {
-                                    logger.debug("未找到事件处理器: {}", event.type);
+                                    logger.debug("跳过策略执行 - 时间间隔未到");
                                 }
+                            } else {
+                                logger.warn("未找到事件处理器: {} - 可能需要注册该事件类型", event.type);
                             }
-                            TimeUnit.MILLISECONDS.sleep(10);
-                        } catch (InterruptedException e) {
-                            logger.info("事件处理线程被中断");
-                            Thread.currentThread().interrupt();
-                            break;
-                        } catch (Exception e) {
-                            logger.error("事件处理失败", e);
+                        } else {
+                            // 4. 无事件时短暂休眠，避免CPU空转
+                            if (loopCount % 10000 == 0) {
+                                logger.debug("无事件接收 - 循环 #{}", loopCount);
+                            }
+                            TimeUnit.MILLISECONDS.sleep(1);
                         }
+                    } catch (InterruptedException e) {
+                        logger.info("策略主线程被中断");
+                        Thread.currentThread().interrupt();
+                        break;
+                    } catch (Exception e) {
+                        logger.error("事件处理或策略执行失败", e);
                     }
-                } finally {
-                    logger.info("事件处理线程已退出");
                 }
-            });
-        }
 
-        // 启动策略执行线程
-        if (strategyExecutorService != null) {
-            strategyTaskFuture = strategyExecutorService.submit(() -> {
-                try {
-                    while (state.isRunning() && state.getCurrentTime() < params.getRunTime()) {
-                        try {
-                            // 更新当前时间
-                            state.updateState();
-
-                            // 执行策略逻辑
-                            executeStrategy();
-
-                            // 等待下一次执行
-                            TimeUnit.MILLISECONDS.sleep(params.getCheckInterval());
-                        } catch (InterruptedException e) {
-                            logger.info("策略执行线程被中断");
-                            Thread.currentThread().interrupt();
-                            break;
-                        } catch (Exception e) {
-                            logger.error("策略执行失败", e);
-                        }
-                    }
-
-                    state.stop();
-                    logger.info("策略执行完成");
-                } finally {
-                    logger.info("策略执行线程已退出");
-                }
-            });
-        }
+                state.stop();
+                logger.info("策略执行完成");
+            } finally {
+                logger.info("策略主线程已退出");
+            }
+        });
     }
 
     /**
-     * 停止策略
+     * 停止策略 - 优雅关闭单线程执行器
      */
     @Override
     public void stop() {
         logger.info("正在停止策略...");
         state.stop();
 
-        // 取消事件处理任务
-        if (eventTaskFuture != null && !eventTaskFuture.isDone()) {
-            logger.debug("取消事件处理任务");
-            eventTaskFuture.cancel(true);
+        // 取消主任务
+        if (mainTaskFuture != null && !mainTaskFuture.isDone()) {
+            logger.debug("取消策略主任务");
+            mainTaskFuture.cancel(true);
             try {
                 // 等待任务完成，最多等待5秒
-                eventTaskFuture.get(5, TimeUnit.SECONDS);
+                mainTaskFuture.get(5, TimeUnit.SECONDS);
             } catch (Exception e) {
-                logger.warn("等待事件处理任务完成时发生异常", e);
-            }
-        }
-
-        // 取消策略执行任务
-        if (strategyTaskFuture != null && !strategyTaskFuture.isDone()) {
-            logger.debug("取消策略执行任务");
-            strategyTaskFuture.cancel(true);
-            try {
-                // 等待任务完成，最多等待5秒
-                strategyTaskFuture.get(5, TimeUnit.SECONDS);
-            } catch (Exception e) {
-                logger.warn("等待策略执行任务完成时发生异常", e);
+                logger.warn("等待主任务完成时发生异常", e);
             }
         }
 
@@ -210,9 +230,16 @@ public class CrossAppService2 implements Actor {
     /**
      * 策略执行逻辑
      */
+    //todo 检查一下 策略为什么没有触发 也没看到日志
     private void executeStrategy() {
+        logger.debug("执行策略检查 - 开始");
+        logger.debug("市场数据状态: Binance买价={}, Binance卖价={}, Binance中间价={}, Bitget买价={}, Bitget卖价={}, Bitget中间价={}",
+                state.getBinanceBidPrice(), state.getBinanceAskPrice(), state.getBinanceMidPrice(),
+                state.getBitgetBidPrice(), state.getBitgetAskPrice(), state.getBitgetMidPrice());
+
         // 检查是否有有效的市场数据和是否可以进行套利
         if (!state.canArbitrage(1000)) { // 1秒内只能套利一次
+            logger.debug("套利条件检查失败: canArbitrage=false, hasValidMarketData={}", state.hasValidMarketData());
             if (params.isDebugMode() && state.hasValidMarketData()) {
                 double spreadPercentage = state.calculateSpreadPercentage();
                 logger.debug("价差: {}%, 未达到套利阈值: {}%", String.format("%.4f", spreadPercentage), params.getArbitrageThreshold());
@@ -373,16 +400,27 @@ public class CrossAppService2 implements Actor {
     /**
      * 处理币安交易Tick事件
      */
+    //todo 任何一个EventHandler 成功失败 都应该有info日志
     private class BinanceTradeTickEventHandler implements EventHandler<MarketData> {
         @Override
         public void handle(Event<MarketData> event) {
+            logger.debug("BinanceTradeTickEventHandler.handle() 开始");
             MarketData marketData = event.payload;
+            logger.debug("MarketData payload: {}", marketData != null ? marketData.getClass().getSimpleName() : "null");
+
             if (marketData.getMessage() instanceof TradeTick tradeTick) {
+                logger.debug("解析到TradeTick: price={}", tradeTick.price);
                 state.setBinanceMidPrice(tradeTick.price);
+                logger.debug("币安中间价已更新: {}", tradeTick.price);
+
                 if (params.isDebugMode()) {
                     logger.debug("币安最新成交价: {}", String.format("%.2f", tradeTick.price));
                 }
+            } else {
+                logger.warn("MarketData.getMessage() 不是 TradeTick 类型: {}",
+                        marketData.getMessage() != null ? marketData.getMessage().getClass().getName() : "null");
             }
+            logger.debug("BinanceTradeTickEventHandler.handle() 完成");
         }
     }
 
@@ -465,17 +503,24 @@ public class CrossAppService2 implements Actor {
     private class BitgetOrderBookDepthEventHandler implements EventHandler<MarketData> {
         @Override
         public void handle(Event<MarketData> event) {
+            logger.debug("收到Bitget订单簿深度事件");
             MarketData marketData = event.payload;
             if (marketData.getMessage() instanceof OrderBookDepth10 orderBook) {
+                logger.debug("Bitget订单簿数据: bids.size={}, asks.size={}",
+                        orderBook.getBids() != null ? orderBook.getBids().size() : 0,
+                        orderBook.getAsks() != null ? orderBook.getAsks().size() : 0);
+
                 // 提取最佳买卖价
                 if (orderBook.getBids() != null && !orderBook.getBids().isEmpty()) {
                     try {
                         // 检查是否有足够的深度数据且不为空字符串
                         if (orderBook.getBids().get(0) != null && orderBook.getBids().get(0).size() > 0) {
                             String bidPriceStr = orderBook.getBids().get(0).get(0);
+                            logger.debug("Bitget买价字符串: '{}'", bidPriceStr);
                             if (bidPriceStr != null && !bidPriceStr.isEmpty()) {
                                 double bidPrice = Double.parseDouble(bidPriceStr);
                                 state.setBitgetBidPrice(bidPrice);
+                                logger.debug("Bitget买价解析成功: {}", bidPrice);
                             } else {
                                 logger.warn("Bitget bid price is empty string");
                             }
@@ -492,9 +537,11 @@ public class CrossAppService2 implements Actor {
                         // 检查是否有足够的深度数据且不为空字符串
                         if (orderBook.getAsks().get(0) != null && orderBook.getAsks().get(0).size() > 0) {
                             String askPriceStr = orderBook.getAsks().get(0).get(0);
+                            logger.debug("Bitget卖价字符串: '{}'", askPriceStr);
                             if (askPriceStr != null && !askPriceStr.isEmpty()) {
                                 double askPrice = Double.parseDouble(askPriceStr);
                                 state.setBitgetAskPrice(askPrice);
+                                logger.debug("Bitget卖价解析成功: {}", askPrice);
                             } else {
                                 logger.warn("Bitget ask price is empty string");
                             }
@@ -508,7 +555,156 @@ public class CrossAppService2 implements Actor {
 
                 // 更新中间价
                 if (state.getBitgetBidPrice() > 0 && state.getBitgetAskPrice() > 0) {
-                    state.setBitgetMidPrice((state.getBitgetBidPrice() + state.getBitgetAskPrice()) / 2);
+                    double midPrice = (state.getBitgetBidPrice() + state.getBitgetAskPrice()) / 2;
+                    state.setBitgetMidPrice(midPrice);
+                    logger.debug("Bitget中间价更新: {}", midPrice);
+                }
+            }
+        }
+    }
+
+    /**
+     * 处理币安订单簿增量更新事件 (OrderBookDeltas)
+     */
+    private class BinanceOrderBookDeltaEventHandler implements EventHandler<MarketData> {
+        @Override
+        public void handle(Event<MarketData> event) {
+            MarketData marketData = event.payload;
+            if (marketData.getMessage() instanceof OrderBookDeltas deltas) {
+                // 增量更新：只提取最佳买卖价更新
+                if (deltas.getBids() != null && !deltas.getBids().isEmpty()) {
+                    try {
+                        if (deltas.getBids().get(0) != null && deltas.getBids().get(0).size() > 0) {
+                            String bidPriceStr = deltas.getBids().get(0).get(0);
+                            if (bidPriceStr != null && !bidPriceStr.isEmpty()) {
+                                double bidPrice = Double.parseDouble(bidPriceStr);
+                                state.setBinanceBidPrice(bidPrice);
+                            }
+                        }
+                    } catch (Exception e) {
+                        logger.warn("Error parsing Binance delta bid price", e);
+                    }
+                }
+
+                if (deltas.getAsks() != null && !deltas.getAsks().isEmpty()) {
+                    try {
+                        if (deltas.getAsks().get(0) != null && deltas.getAsks().get(0).size() > 0) {
+                            String askPriceStr = deltas.getAsks().get(0).get(0);
+                            if (askPriceStr != null && !askPriceStr.isEmpty()) {
+                                double askPrice = Double.parseDouble(askPriceStr);
+                                state.setBinanceAskPrice(askPrice);
+                            }
+                        }
+                    } catch (Exception e) {
+                        logger.warn("Error parsing Binance delta ask price", e);
+                    }
+                }
+
+                // 更新中间价
+                if (state.getBinanceBidPrice() > 0 && state.getBinanceAskPrice() > 0) {
+                    state.setBinanceMidPrice((state.getBinanceBidPrice() + state.getBinanceAskPrice()) / 2);
+                }
+            } else if (marketData.getMessage() instanceof OrderBookDelta delta) {
+                // 单一增量更新（bookTicker类型）
+                if (delta.getBidPrice() > 0) {
+                    state.setBinanceBidPrice(delta.getBidPrice());
+                }
+                if (delta.getAskPrice() > 0) {
+                    state.setBinanceAskPrice(delta.getAskPrice());
+                }
+
+                // 更新中间价
+                if (state.getBinanceBidPrice() > 0 && state.getBinanceAskPrice() > 0) {
+                    state.setBinanceMidPrice((state.getBinanceBidPrice() + state.getBinanceAskPrice()) / 2);
+                }
+            }
+        }
+    }
+
+    /**
+     * 处理Bitget订单簿增量更新事件
+     */
+    private class BitgetOrderBookDeltaEventHandler implements EventHandler<MarketData> {
+        @Override
+        public void handle(Event<MarketData> event) {
+            MarketData marketData = event.payload;
+            if (marketData.getMessage() instanceof OrderBookDeltas deltas) {
+                // 增量更新：只提取最佳买卖价更新
+                if (deltas.getBids() != null && !deltas.getBids().isEmpty()) {
+                    try {
+                        if (deltas.getBids().get(0) != null && deltas.getBids().get(0).size() > 0) {
+                            String bidPriceStr = deltas.getBids().get(0).get(0);
+                            if (bidPriceStr != null && !bidPriceStr.isEmpty()) {
+                                double bidPrice = Double.parseDouble(bidPriceStr);
+                                state.setBitgetBidPrice(bidPrice);
+                            }
+                        }
+                    } catch (Exception e) {
+                        logger.warn("Error parsing Bitget delta bid price", e);
+                    }
+                }
+
+                if (deltas.getAsks() != null && !deltas.getAsks().isEmpty()) {
+                    try {
+                        if (deltas.getAsks().get(0) != null && deltas.getAsks().get(0).size() > 0) {
+                            String askPriceStr = deltas.getAsks().get(0).get(0);
+                            if (askPriceStr != null && !askPriceStr.isEmpty()) {
+                                double askPrice = Double.parseDouble(askPriceStr);
+                                state.setBitgetAskPrice(askPrice);
+                            }
+                        }
+                    } catch (Exception e) {
+                        logger.warn("Error parsing Bitget delta ask price", e);
+                    }
+                }
+
+                // 更新中间价
+                if (state.getBitgetBidPrice() > 0 && state.getBitgetAskPrice() > 0) {
+                    double midPrice = (state.getBitgetBidPrice() + state.getBitgetAskPrice()) / 2;
+                    state.setBitgetMidPrice(midPrice);
+                }
+            } else if (marketData.getMessage() instanceof OrderBookDelta delta) {
+                // 单一增量更新
+                if (delta.getBidPrice() > 0) {
+                    state.setBitgetBidPrice(delta.getBidPrice());
+                }
+                if (delta.getAskPrice() > 0) {
+                    state.setBitgetAskPrice(delta.getAskPrice());
+                }
+
+                // 更新中间价
+                if (state.getBitgetBidPrice() > 0 && state.getBitgetAskPrice() > 0) {
+                    double midPrice = (state.getBitgetBidPrice() + state.getBitgetAskPrice()) / 2;
+                    state.setBitgetMidPrice(midPrice);
+                }
+            }
+        }
+    }
+
+    /**
+     * 处理币安QuoteTick事件 (来自bookTicker流)
+     * 提供最优买卖价的高频实时更新
+     */
+    private class BinanceQuoteTickEventHandler implements EventHandler<MarketData> {
+        @Override
+        public void handle(Event<MarketData> event) {
+            MarketData marketData = event.payload;
+            if (marketData.getMessage() instanceof com.tanggo.fund.jnautilustrader.core.entity.data.QuoteTick quoteTick) {
+                // 更新最优买卖价
+                if (quoteTick.getBidPrice() > 0) {
+                    state.setBinanceBidPrice(quoteTick.getBidPrice());
+                }
+                if (quoteTick.getAskPrice() > 0) {
+                    state.setBinanceAskPrice(quoteTick.getAskPrice());
+                }
+
+                // 更新中间价
+                if (state.getBinanceBidPrice() > 0 && state.getBinanceAskPrice() > 0) {
+                    state.setBinanceMidPrice((state.getBinanceBidPrice() + state.getBinanceAskPrice()) / 2);
+                }
+
+                if (params.isDebugMode()) {
+                    logger.debug("币安bookTicker更新: bid={}, ask={}", quoteTick.getBidPrice(), quoteTick.getAskPrice());
                 }
             }
         }

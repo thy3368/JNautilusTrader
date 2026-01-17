@@ -1,4 +1,4 @@
-package com.tanggo.fund.jnautilustrader.config;
+package com.tanggo.fund.jnautilustrader.adapter.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.concurrent.CustomizableThreadFactory;

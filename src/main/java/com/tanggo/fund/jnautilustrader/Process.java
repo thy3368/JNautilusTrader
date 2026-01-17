@@ -1,7 +1,7 @@
-package com.tanggo.fund.jnautilustrader.core;
+package com.tanggo.fund.jnautilustrader;
 
-import com.tanggo.fund.jnautilustrader.core.entity.ApplicationConfig;
 import com.tanggo.fund.jnautilustrader.core.entity.Actor;
+import com.tanggo.fund.jnautilustrader.core.entity.ApplicationConfig;
 import lombok.Data;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

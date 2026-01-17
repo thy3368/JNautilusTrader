@@ -1,4 +1,4 @@
-package com.tanggo.fund.jnautilustrader.core.process.stoikov;
+package com.tanggo.fund.jnautilustrader.stragety.stoikov;
 
 import lombok.Data;
 

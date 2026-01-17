@@ -49,11 +49,11 @@
     <bean id="eventHandlerRepo" class="com.tanggo.fund.jnautilustrader.adapter.event_repo.HashMapEventHandlerRepo"/>
 
     <!-- 跨交易所套利参数 -->
-    <bean id="crossArbitrageParams" class="com.tanggo.fund.jnautilustrader.core.process.cross.CrossArbitrageParams"
+    <bean id="crossArbitrageParams" class="com.tanggo.fund.jnautilustrader.stragety.cross.CrossArbitrageParams"
           factory-method="defaultParams"/>
 
     <!-- 跨交易所套利策略 -->
-    <bean id="crossAppService" class="com.tanggo.fund.jnautilustrader.core.process.cross.CrossAppService">
+    <bean id="crossAppService" class="com.tanggo.fund.jnautilustrader.stragety.cross.CrossAppService">
         <property name="params" ref="crossArbitrageParams"/>
         <property name="marketDataRepo" ref="marketDataEventRepo"/>
         <property name="tradeCmdRepo" ref="tradeCmdEventRepo"/>
@@ -254,7 +254,7 @@
     </bean>
 
     <!-- ==================== Process - 系统进程管理器 ==================== -->
-    <bean id="process" class="com.tanggo.fund.jnautilustrader.core.Process">
+    <bean id="process" class="com.tanggo.fund.jnautilustrader.Process">
         <property name="applicationConfig" ref="serviceConfig"/>
     </bean>
 

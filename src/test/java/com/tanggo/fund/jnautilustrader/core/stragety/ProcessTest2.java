@@ -1,4 +1,4 @@
-package com.tanggo.fund.jnautilustrader.core.process;
+package com.tanggo.fund.jnautilustrader.core.stragety;
 
 import com.tanggo.fund.jnautilustrader.adapter.event_repo.BlockingQueueEventRepo;
 import com.tanggo.fund.jnautilustrader.adapter.mdgw.bn.BNMDGWWebSocketClient;
@@ -12,7 +12,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.concurrent.CustomizableThreadFactory;
 
 import java.lang.management.ManagementFactory;
