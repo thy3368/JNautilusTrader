@@ -12,16 +12,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.concurrent.CustomizableThreadFactory;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadInfo;
 import java.lang.management.ThreadMXBean;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -66,10 +64,29 @@ class ProcessTest2 {
         };
     }
 
+    public ThreadFactory timerThreadFactory() {
+        return new CustomizableThreadFactory("timer-") {
+            private final AtomicInteger threadNumber = new AtomicInteger(1);
+
+            @Override
+            public Thread newThread(Runnable r) {
+                Thread thread = super.newThread(r);
+                thread.setName("timer-" + threadNumber.getAndIncrement());
+                thread.setPriority(Thread.NORM_PRIORITY);
+                thread.setDaemon(true);
+                return thread;
+            }
+        };
+    }
+
 
     @BeforeEach
     void setUp() {
         ThreadLogger.info(logger, "=== 初始化测试环境 ===");
+
+
+        ScheduledExecutorService timerExecutorService= Executors.newScheduledThreadPool(4, timerThreadFactory());
+
 
 
         // 创建线程池
@@ -86,7 +103,7 @@ class ProcessTest2 {
         mdEventRepo = new BlockingQueueEventRepo<>();
 
         // 创建 WebSocket 客户端
-        bnmdgwWebSocketClient = new BNMDGWWebSocketClient(mdEventRepo, wsExecutorService);
+        bnmdgwWebSocketClient = new BNMDGWWebSocketClient(mdEventRepo, timerExecutorService, wsExecutorService);
 
         logger.info("测试环境初始化完成");
     }

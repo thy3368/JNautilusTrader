@@ -42,7 +42,7 @@ class ProcessTest3 {
         tradeCmdBlockingQueueEventRepo = new BlockingQueueEventRepo<>();
 
         // 创建 WebSocket 客户端
-        mdgwActor = new BNMDGWWebSocketClient(marketDataBlockingQueueEventRepo,null);
+        mdgwActor = new BNMDGWWebSocketClient(marketDataBlockingQueueEventRepo, null, null);
 
         // 创建 WebSocket 客户端
         tradegwActor = new BNTradeGWWebSocketClient(marketDataBlockingQueueEventRepo, tradeCmdBlockingQueueEventRepo);

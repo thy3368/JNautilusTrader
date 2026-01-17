@@ -36,7 +36,7 @@ public class Process {
             startStrategy();
 
             // 启动交易客户端
-            startTradeClients();
+//            startTradeClients();
 
             isRunning = true;
             logger.info("所有组件启动成功，交易系统已就绪");
