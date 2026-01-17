@@ -220,7 +220,7 @@ public class BTTradeGWWebSocketClient implements Actor {
      */
     private void sendOrderCommand(PlaceOrder placeOrder) {
         try {
-            // 转换PlaceOrder到Bitget API格式
+            // 转换PlaceOrder到Bitget API格式         //todo 不要依赖 JsonProperty 标签
             String orderJson = convertToBitgetOrderFormat(placeOrder);
             logger.debug("发送交易命令: {}", orderJson);
 

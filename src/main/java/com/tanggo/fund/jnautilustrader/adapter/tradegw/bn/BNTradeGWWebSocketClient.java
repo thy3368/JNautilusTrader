@@ -207,7 +207,20 @@ public class BNTradeGWWebSocketClient implements Actor {
      * 转换PlaceOrder到币安API格式
      */
     private String convertToBinanceOrderFormat(PlaceOrder placeOrder) throws JsonProcessingException {
-        return objectMapper.writeValueAsString(placeOrder);
+        // 手动构建币安API格式的JSON，不依赖JsonProperty标签
+        com.fasterxml.jackson.databind.node.ObjectNode orderNode = objectMapper.createObjectNode();
+        orderNode.put("symbol", placeOrder.getSymbol());
+        orderNode.put("side", placeOrder.getSide());
+        orderNode.put("type", placeOrder.getType());
+        if (placeOrder.getTimeInForce() != null) {
+            orderNode.put("timeInForce", placeOrder.getTimeInForce());
+        }
+        orderNode.put("quantity", placeOrder.getQuantity());
+        orderNode.put("price", placeOrder.getPrice());
+        if (placeOrder.getNewClientOrderId() != null) {
+            orderNode.put("newClientOrderId", placeOrder.getNewClientOrderId());
+        }
+        return objectMapper.writeValueAsString(orderNode);
     }
 
     /**
