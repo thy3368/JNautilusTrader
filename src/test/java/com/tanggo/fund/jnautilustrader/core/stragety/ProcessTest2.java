@@ -4,7 +4,6 @@ import com.tanggo.fund.jnautilustrader.adapter.event_repo.event.BlockingQueueEve
 import com.tanggo.fund.jnautilustrader.adapter.mdgw.bn.BNMDGWWebSocketClient;
 import com.tanggo.fund.jnautilustrader.core.entity.Actor;
 import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
-import com.tanggo.fund.jnautilustrader.core.util.ThreadLogger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -81,7 +80,7 @@ class ProcessTest2 {
 
     @BeforeEach
     void setUp() {
-        ThreadLogger.info(logger, "=== 初始化测试环境 ===");
+        logger.info( "=== 初始化测试环境 ===");
 
 
         ScheduledExecutorService timerExecutorService= Executors.newScheduledThreadPool(4, timerThreadFactory());
@@ -110,7 +109,7 @@ class ProcessTest2 {
     @AfterEach
     void tearDown() {
 
-        ThreadLogger.info(logger, "=== 清理测试环境 ===");
+        logger.info( "=== 清理测试环境 ===");
 
         // 停止运行
         running.set(false);
@@ -133,7 +132,7 @@ class ProcessTest2 {
             }
         }
 
-        ThreadLogger.info(logger, "测试环境清理完成，总共接收事件数: {}", eventCount.get());
+        logger.info( "测试环境清理完成，总共接收事件数: {}", eventCount.get());
     }
 
     /**
@@ -147,10 +146,10 @@ class ProcessTest2 {
      */
     @Test
     void testWebSocketClientInSeparateThread() throws InterruptedException {
-        ThreadLogger.info(logger, "=== 开始测试 WebSocket 客户端多线程运行 ===");
+        logger.info( "=== 开始测试 WebSocket 客户端多线程运行 ===");
 
         // 启动 WebSocket 客户端连接
-        ThreadLogger.info(logger, "正在启动 WebSocket 客户端...");
+        logger.info( "正在启动 WebSocket 客户端...");
         bnmdgwWebSocketClient.start_link();
 
         // 等待连接建立
@@ -159,13 +158,13 @@ class ProcessTest2 {
 
         // 启动市场数据事件消费者线程，打印接收到的行情
         executorService.submit(() -> {
-            ThreadLogger.info(logger, "市场数据消费者线程已启动");
+            logger.info( "市场数据消费者线程已启动");
 
             while (running.get()) {
                 var event = mdEventRepo.receive();
                 if (event != null) {
                     eventCount.incrementAndGet();
-                    ThreadLogger.info(logger, "收到市场数据事件: type={}, payload={}", event.type, event.payload);
+                    logger.info( "收到市场数据事件: type={}, payload={}", event.type, event.payload);
 
 
                 }
@@ -173,7 +172,7 @@ class ProcessTest2 {
         });
 
         // 让测试一直运行，直到手动中断
-        ThreadLogger.info(logger, "测试正在运行...按 Ctrl+C 停止");
+        logger.info( "测试正在运行...按 Ctrl+C 停止");
         // 打印线程树
 //        printThreadTree();
         Thread.currentThread().join();  // 永远等待，直到线程被中断
@@ -203,11 +202,11 @@ class ProcessTest2 {
         }
 
         if (mainThread == null) {
-            ThreadLogger.warn(logger, "未找到 main 线程");
+            logger.warn( "未找到 main 线程");
             return;
         }
 
-        ThreadLogger.info(logger, "=== 线程树结构 (根线程: main) ===");
+        logger.info( "=== 线程树结构 (根线程: main) ===");
         printThreadTreeNode(mainThread, threadMap, 0);
 
         // 打印未关联到 main 线程的其他线程
@@ -222,7 +221,7 @@ class ProcessTest2 {
         }
 
         if (!orphanThreads.isEmpty()) {
-            ThreadLogger.info(logger, "=== 孤立线程 ===");
+            logger.info( "=== 孤立线程 ===");
             for (ThreadInfo info : orphanThreads) {
                 printThreadTreeNode(info, threadMap, 0);
             }
@@ -238,7 +237,7 @@ class ProcessTest2 {
         String priorityStr = "P" + info.getPriority();
         String daemonStr = info.isDaemon() ? "[Daemon]" : "";
 
-        ThreadLogger.info(logger, "{}[{}] {} ({}) {} {}", indent, info.getThreadId(), info.getThreadName(), stateStr, priorityStr, daemonStr);
+        logger.info( "{}[{}] {} ({}) {} {}", indent, info.getThreadId(), info.getThreadName(), stateStr, priorityStr, daemonStr);
 
         // 递归打印子线程（这里我们基于线程组和名称关联）
         // 简单的启发式规则：如果线程名称包含父线程的名称特征，或者线程组相同

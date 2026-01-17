@@ -4,7 +4,6 @@ import com.tanggo.fund.jnautilustrader.adapter.event_repo.event.BlockingQueueEve
 import com.tanggo.fund.jnautilustrader.adapter.mdgw.bitget.BTMDGWWebSocketClient;
 import com.tanggo.fund.jnautilustrader.core.entity.Actor;
 import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
-import com.tanggo.fund.jnautilustrader.core.util.ThreadLogger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -91,7 +90,7 @@ class ProcessTest4 {
 
     @BeforeEach
     void setUp() {
-        ThreadLogger.info(logger, "=== 初始化Bitget WebSocket测试环境 ===");
+        logger.info("=== 初始化Bitget WebSocket测试环境 ===");
 
         // 创建定时器线程池用于重连调度
         timerExecutorService = Executors.newScheduledThreadPool(2, timerThreadFactory());
@@ -105,12 +104,12 @@ class ProcessTest4 {
         // 创建 Bitget WebSocket 客户端
         btmdgwWebSocketClient = new BTMDGWWebSocketClient(mdEventRepo, timerExecutorService);
 
-        ThreadLogger.info(logger, "Bitget测试环境初始化完成");
+        logger.info("Bitget测试环境初始化完成");
     }
 
     @AfterEach
     void tearDown() {
-        ThreadLogger.info(logger, "=== 清理Bitget测试环境 ===");
+        logger.info("=== 清理Bitget测试环境 ===");
 
         // 停止运行
         running.set(false);
@@ -146,8 +145,7 @@ class ProcessTest4 {
             }
         }
 
-        ThreadLogger.info(logger, "测试环境清理完成 - 总事件数: {}, 交易数据: {}, 订单簿数据: {}",
-            eventCount.get(), tradeTickCount.get(), orderBookCount.get());
+        logger.info("测试环境清理完成 - 总事件数: {}, 交易数据: {}, 订单簿数据: {}", eventCount.get(), tradeTickCount.get(), orderBookCount.get());
     }
 
     /**
@@ -161,10 +159,10 @@ class ProcessTest4 {
      */
     @Test
     void testBitgetWebSocketClientInSeparateThread() throws InterruptedException {
-        ThreadLogger.info(logger, "=== 开始测试 Bitget WebSocket 客户端多线程运行 ===");
+        logger.info("=== 开始测试 Bitget WebSocket 客户端多线程运行 ===");
 
         // 启动 WebSocket 客户端连接
-        ThreadLogger.info(logger, "正在启动 Bitget WebSocket 客户端...");
+        logger.info("正在启动 Bitget WebSocket 客户端...");
         btmdgwWebSocketClient.start_link();
 
         // 等待连接建立
@@ -172,7 +170,7 @@ class ProcessTest4 {
 
         // 启动市场数据事件消费者线程
         executorService.submit(() -> {
-            ThreadLogger.info(logger, "Bitget市场数据消费者线程已启动");
+            logger.info("Bitget市场数据消费者线程已启动");
 
             while (running.get()) {
                 try {
@@ -184,38 +182,30 @@ class ProcessTest4 {
                         if (event.type != null) {
                             if (event.type.contains("TRADE")) {
                                 tradeTickCount.incrementAndGet();
-                                ThreadLogger.info(logger,
-                                    "[交易数据] type={}, payload={}",
-                                    event.type, event.payload);
+                                logger.info("[交易数据] type={}, payload={}", event.type, event.payload);
                             } else if (event.type.contains("ORDER_BOOK")) {
                                 orderBookCount.incrementAndGet();
-                                ThreadLogger.info(logger,
-                                    "[订单簿] type={}, payload={}",
-                                    event.type, event.payload);
+                                logger.info("[订单簿] type={}, payload={}", event.type, event.payload);
                             } else {
-                                ThreadLogger.info(logger,
-                                    "[其他数据] type={}, payload={}",
-                                    event.type, event.payload);
+                                logger.info("[其他数据] type={}, payload={}", event.type, event.payload);
                             }
                         }
 
                         // 每100个事件打印一次统计
                         if (eventCount.get() % 100 == 0) {
-                            ThreadLogger.info(logger,
-                                "=== 统计信息 === 总计: {}, 交易: {}, 订单簿: {}",
-                                eventCount.get(), tradeTickCount.get(), orderBookCount.get());
+                            logger.info("=== 统计信息 === 总计: {}, 交易: {}, 订单簿: {}", eventCount.get(), tradeTickCount.get(), orderBookCount.get());
                         }
                     }
                 } catch (Exception e) {
-                    ThreadLogger.error(logger, "处理市场数据事件时出错", e);
+                    logger.error("处理市场数据事件时出错", e);
                 }
             }
 
-            ThreadLogger.info(logger, "市场数据消费者线程已停止");
+            logger.info("市场数据消费者线程已停止");
         });
 
         // 让测试持续运行，直到手动中断
-        ThreadLogger.info(logger, "测试正在运行...按 Ctrl+C 停止");
+        logger.info("测试正在运行...按 Ctrl+C 停止");
         Thread.currentThread().join();  // 永远等待，直到线程被中断
     }
 
@@ -226,10 +216,10 @@ class ProcessTest4 {
      */
     @Test
     void testBitgetWebSocketClientShortRun() throws InterruptedException {
-        ThreadLogger.info(logger, "=== 开始测试 Bitget WebSocket 短期运行 ===");
+        logger.info("=== 开始测试 Bitget WebSocket 短期运行 ===");
 
         // 启动 WebSocket 客户端
-        ThreadLogger.info(logger, "正在启动 Bitget WebSocket 客户端...");
+        logger.info("正在启动 Bitget WebSocket 客户端...");
         btmdgwWebSocketClient.start_link();
 
         // 等待连接建立
@@ -237,7 +227,7 @@ class ProcessTest4 {
 
         // 启动消费者线程
         Future<?> consumerFuture = executorService.submit(() -> {
-            ThreadLogger.info(logger, "市场数据消费者线程已启动");
+            logger.info("市场数据消费者线程已启动");
 
             while (running.get()) {
                 try {
@@ -251,16 +241,16 @@ class ProcessTest4 {
                             orderBookCount.incrementAndGet();
                         }
 
-                        ThreadLogger.debug(logger, "收到事件: {}", event.type);
+                        logger.debug("收到事件: {}", event.type);
                     }
                 } catch (Exception e) {
-                    ThreadLogger.error(logger, "处理事件时出错", e);
+                    logger.error("处理事件时出错", e);
                 }
             }
         });
 
         // 运行30秒后停止
-        ThreadLogger.info(logger, "测试将运行30秒...");
+        logger.info("测试将运行30秒...");
         Thread.sleep(30000);
 
         // 停止测试
@@ -270,12 +260,10 @@ class ProcessTest4 {
         try {
             consumerFuture.get(5, TimeUnit.SECONDS);
         } catch (Exception e) {
-            ThreadLogger.warn(logger, "等待消费者线程结束时出错", e);
+            logger.warn("等待消费者线程结束时出错", e);
         }
 
-        ThreadLogger.info(logger,
-            "=== 测试完成 === 总事件数: {}, 交易数据: {}, 订单簿数据: {}",
-            eventCount.get(), tradeTickCount.get(), orderBookCount.get());
+        logger.info("=== 测试完成 === 总事件数: {}, 交易数据: {}, 订单簿数据: {}", eventCount.get(), tradeTickCount.get(), orderBookCount.get());
     }
 
     /**
@@ -283,13 +271,11 @@ class ProcessTest4 {
      */
     @Test
     void testBitgetWebSocketConnectionStatus() throws InterruptedException {
-        ThreadLogger.info(logger, "=== 测试 Bitget WebSocket 连接状态 ===");
+        logger.info("=== 测试 Bitget WebSocket 连接状态 ===");
 
         // 初始状态应该是未连接
-        if (btmdgwWebSocketClient instanceof BTMDGWWebSocketClient) {
-            BTMDGWWebSocketClient client = (BTMDGWWebSocketClient) btmdgwWebSocketClient;
-            ThreadLogger.info(logger, "初始连接状态: {}",
-                client.isConnected() ? "已连接" : "未连接");
+        if (btmdgwWebSocketClient instanceof BTMDGWWebSocketClient client) {
+            logger.info("初始连接状态: {}", client.isConnected() ? "已连接" : "未连接");
         }
 
         // 启动连接
@@ -299,16 +285,14 @@ class ProcessTest4 {
         Thread.sleep(3000);
 
         // 检查连接状态
-        if (btmdgwWebSocketClient instanceof BTMDGWWebSocketClient) {
-            BTMDGWWebSocketClient client = (BTMDGWWebSocketClient) btmdgwWebSocketClient;
+        if (btmdgwWebSocketClient instanceof BTMDGWWebSocketClient client) {
             boolean isConnected = client.isConnected();
-            ThreadLogger.info(logger, "连接建立后状态: {}",
-                isConnected ? "已连接" : "未连接");
+            logger.info("连接建立后状态: {}", isConnected ? "已连接" : "未连接");
 
             if (isConnected) {
-                ThreadLogger.info(logger, "✓ WebSocket 连接成功建立");
+                logger.info("✓ WebSocket 连接成功建立");
             } else {
-                ThreadLogger.warn(logger, "✗ WebSocket 连接未能建立");
+                logger.warn("✗ WebSocket 连接未能建立");
             }
         }
 
