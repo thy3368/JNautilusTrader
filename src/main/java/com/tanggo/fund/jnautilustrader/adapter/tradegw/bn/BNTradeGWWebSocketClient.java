@@ -28,15 +28,13 @@ import java.util.concurrent.TimeUnit;
 public class BNTradeGWWebSocketClient implements Actor {
 
     private static final Logger logger = LoggerFactory.getLogger(BNTradeGWWebSocketClient.class);
-
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
     private BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo;
-
-
     private BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo;
-    private ObjectMapper objectMapper;
+    //todo 由外注入
     private ScheduledExecutorService reconnectExecutor;
     private boolean ownScheduler; // 标记是否自己创建的调度器
-    private HttpClient httpClient;
     @Value("${binance.websocket.trade.url:wss://stream.binance.com:9443/ws}")
     private String baseWebSocketUrl;
     private String listenKey; // 币安WebSocket用户数据流监听密钥
@@ -55,8 +53,7 @@ public class BNTradeGWWebSocketClient implements Actor {
     /**
      * 构造函数 - 用于注入依赖
      */
-    public BNTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo,
-                                     BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo) {
+    public BNTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo, BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo) {
         this();
         this.marketDataBlockingQueueEventRepo = marketDataBlockingQueueEventRepo;
         this.tradeCmdEventRepo = tradeCmdEventRepo;
@@ -65,9 +62,7 @@ public class BNTradeGWWebSocketClient implements Actor {
     /**
      * 构造函数 - 包含所有依赖
      */
-    public BNTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo,
-                                     BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo,
-                                     ScheduledExecutorService reconnectExecutor) {
+    public BNTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo, BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo, ScheduledExecutorService reconnectExecutor) {
         this(marketDataBlockingQueueEventRepo, tradeCmdEventRepo);
         this.reconnectExecutor = reconnectExecutor;
         this.ownScheduler = false;
@@ -77,7 +72,8 @@ public class BNTradeGWWebSocketClient implements Actor {
     /**
      * 初始化连接
      */
-    public void init() {
+    @Override
+    public void start_link() {
         logger.info("初始化币安交易WebSocket客户端");
         connect();
         startCommandProcessing();
@@ -354,14 +350,9 @@ public class BNTradeGWWebSocketClient implements Actor {
         logger.debug("收到余额更新: {}", balance);
     }
 
-    @Override
-    public void start_link() {
-        connect();
-    }
 
     @Override
     public void stop() {
-
 
         destroy();
     }

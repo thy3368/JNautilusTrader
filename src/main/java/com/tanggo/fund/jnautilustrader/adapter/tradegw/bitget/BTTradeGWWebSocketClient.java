@@ -10,18 +10,14 @@ import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
 import com.tanggo.fund.jnautilustrader.core.entity.TradeCmd;
 import com.tanggo.fund.jnautilustrader.core.entity.data.PlaceOrder;
 import com.tanggo.fund.jnautilustrader.core.entity.data.TradeTick;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -32,14 +28,17 @@ import java.util.concurrent.TimeUnit;
 public class BTTradeGWWebSocketClient implements Actor {
 
     private static final Logger logger = LoggerFactory.getLogger(BTTradeGWWebSocketClient.class);
-
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
     private BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo;
-
     private BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo;
-    private ObjectMapper objectMapper;
+    //todo 由外注入
     private ScheduledExecutorService reconnectExecutor;
-    private boolean ownScheduler; // 标记是否自己创建的调度器
-    private HttpClient httpClient;
+    @Value("${bitget.websocket.trade.url:wss://ws.bitget.com/v2/ws/private}")
+    private String baseWebSocketUrl;
+    private String listenKey; // Bitget WebSocket用户数据流监听密钥
+    private WebSocket webSocket;
+    private volatile boolean connected = false;
 
     /**
      * 无参构造函数 - Spring需要
@@ -47,14 +46,12 @@ public class BTTradeGWWebSocketClient implements Actor {
     public BTTradeGWWebSocketClient() {
         this.objectMapper = new ObjectMapper();
         this.httpClient = HttpClient.newHttpClient();
-        this.ownScheduler = true;
     }
 
     /**
      * 构造函数 - 用于注入依赖
      */
-    public BTTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo,
-                                     BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo) {
+    public BTTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo, BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo) {
         this();
         this.marketDataBlockingQueueEventRepo = marketDataBlockingQueueEventRepo;
         this.tradeCmdEventRepo = tradeCmdEventRepo;
@@ -63,25 +60,17 @@ public class BTTradeGWWebSocketClient implements Actor {
     /**
      * 构造函数 - 包含所有依赖
      */
-    public BTTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo,
-                                     BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo,
-                                     ScheduledExecutorService reconnectExecutor) {
+    public BTTradeGWWebSocketClient(BlockingQueueEventRepo<MarketData> marketDataBlockingQueueEventRepo, BlockingQueueEventRepo<TradeCmd> tradeCmdEventRepo, ScheduledExecutorService reconnectExecutor) {
         this(marketDataBlockingQueueEventRepo, tradeCmdEventRepo);
         this.reconnectExecutor = reconnectExecutor;
-        this.ownScheduler = false;
     }
-    @Value("${bitget.websocket.trade.url:wss://ws.bitget.com/v2/ws/private}")
-    private String baseWebSocketUrl;
-    private String listenKey; // Bitget WebSocket用户数据流监听密钥
-    private WebSocket webSocket;
-    private volatile boolean connected = false;
-
-
 
     /**
      * 初始化连接
      */
-    public void init() {
+
+    @Override
+    public void start_link() {
         logger.info("初始化Bitget交易WebSocket客户端");
         connect();
         startCommandProcessing();
@@ -125,15 +114,7 @@ public class BTTradeGWWebSocketClient implements Actor {
      */
     private void authenticate() {
         try {
-            String authMsg = "{\n" +
-                    "    \"op\": \"auth\",\n" +
-                    "    \"args\": {\n" +
-                    "        \"apiKey\": \"your_api_key\",\n" +
-                    "        \"passphrase\": \"your_passphrase\",\n" +
-                    "        \"timestamp\": \"" + System.currentTimeMillis() + "\",\n" +
-                    "        \"sign\": \"your_signature\"\n" +
-                    "    }\n" +
-                    "}";
+            String authMsg = "{\n" + "    \"op\": \"auth\",\n" + "    \"args\": {\n" + "        \"apiKey\": \"your_api_key\",\n" + "        \"passphrase\": \"your_passphrase\",\n" + "        \"timestamp\": \"" + System.currentTimeMillis() + "\",\n" + "        \"sign\": \"your_signature\"\n" + "    }\n" + "}";
             webSocket.sendText(authMsg, true);
             logger.info("Sent authentication message to Bitget");
         } catch (Exception e) {
@@ -146,6 +127,7 @@ public class BTTradeGWWebSocketClient implements Actor {
      * 启动命令处理线程
      */
     private void startCommandProcessing() {
+        //todo 该线程由外面注入
         Thread commandThread = new Thread(() -> {
             while (!Thread.currentThread().isInterrupted()) {
                 try {
@@ -238,20 +220,7 @@ public class BTTradeGWWebSocketClient implements Actor {
         String side = placeOrder.isBuy() ? "buy" : "sell";
         String orderType = "limit";
 
-        return "{\n" +
-                "    \"op\": \"order\",\n" +
-                "    \"args\": [\n" +
-                "        {\n" +
-                "            \"instType\": \"SPOT\",\n" +
-                "            \"instId\": \"BTCUSDT\",\n" +
-                "            \"side\": \"" + side + "\",\n" +
-                "            \"ordType\": \"" + orderType + "\",\n" +
-                "            \"px\": \"" + placeOrder.getPrice() + "\",\n" +
-                "            \"sz\": \"" + placeOrder.getQuantity() + "\",\n" +
-                "            \"timeInForce\": \"GTC\"\n" +
-                "        }\n" +
-                "    ]\n" +
-                "}";
+        return "{\n" + "    \"op\": \"order\",\n" + "    \"args\": [\n" + "        {\n" + "            \"instType\": \"SPOT\",\n" + "            \"instId\": \"BTCUSDT\",\n" + "            \"side\": \"" + side + "\",\n" + "            \"ordType\": \"" + orderType + "\",\n" + "            \"px\": \"" + placeOrder.getPrice() + "\",\n" + "            \"sz\": \"" + placeOrder.getQuantity() + "\",\n" + "            \"timeInForce\": \"GTC\"\n" + "        }\n" + "    ]\n" + "}";
     }
 
     /**
@@ -389,10 +358,6 @@ public class BTTradeGWWebSocketClient implements Actor {
         logger.debug("收到账户更新: {}", accountNode);
     }
 
-    @Override
-    public void start_link() {
-        connect();
-    }
 
     @Override
     public void stop() {

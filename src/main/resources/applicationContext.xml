@@ -14,7 +14,7 @@
     <!-- ==================== StrategyConfig - 策略配置 ==================== -->
 
     <!-- StrategyConfig配置 - 配置市场数据客户端、交易客户端和策略 -->
-    <bean id="serviceConfig" class="com.tanggo.fund.jnautilustrader.ApplicationConfig">
+    <bean id="serviceConfig" class="com.tanggo.fund.jnautilustrader.core.entity.ApplicationConfig">
         <!-- 市场数据客户端列表 -->
         <property name="mdClients">
             <list>

@@ -31,9 +31,9 @@ import java.util.concurrent.TimeUnit;
  */
 
 @Data
-public class CrossAppService implements Actor {
+public class CrossAppService2 implements Actor {
 
-    private static final Logger logger = LoggerFactory.getLogger(CrossAppService.class);
+    private static final Logger logger = LoggerFactory.getLogger(CrossAppService2.class);
 
     // 策略参数
     private CrossArbitrageParams params;
@@ -44,14 +44,13 @@ public class CrossAppService implements Actor {
     private EventRepo<MarketData> marketDataRepo;
     private EventRepo<TradeCmd> tradeCmdRepo;
     private EventHandlerRepo<MarketData> eventHandlerRepo;
-    // 单线程执行器，用于事件处理和策略执行
-    private ExecutorService singleThreadExecutor;
+    // 线程池引用，用于资源清理
+    private ExecutorService strategyExecutorService;
+    private ExecutorService eventExecutorService;
 
     // 用于跟踪提交的任务
-    private Future<?> mainTaskFuture;
-
-    // 最后一次策略执行时间戳（纳秒）
-    private volatile long lastStrategyExecutionTime = 0;
+    private Future<?> eventTaskFuture;
+    private Future<?> strategyTaskFuture;
 
 
     /**
@@ -69,66 +68,77 @@ public class CrossAppService implements Actor {
     }
 
     /**
-     * 启动策略 - 单线程事件驱动模式
-     * 事件处理和策略执行在同一线程中，事件到达后立即触发策略检查
+     * 启动策略
      */
     @Override
     public void start_link() {
-        if (singleThreadExecutor == null) {
-            logger.error("单线程执行器未初始化");
-            return;
+
+        //todo 事件处理和策略执行放到同线程
+        // 启动事件处理线程
+        if (eventExecutorService != null) {
+            eventTaskFuture = eventExecutorService.submit(() -> {
+                registerEventHandlers();
+                state.start();
+                logger.info("跨币安和Bitget现货BTC套利策略启动成功");
+                logger.info("策略参数: {}", params);
+
+                try {
+                    while (state.isRunning()) {
+                        try {
+                            Event<MarketData> event = marketDataRepo.receive();
+                            if (event != null) {
+                                EventHandler<MarketData> handler = eventHandlerRepo.queryBy(event.type);
+                                if (handler != null) {
+                                    handler.handle(event);
+                                } else {
+                                    logger.debug("未找到事件处理器: {}", event.type);
+                                }
+                            }
+                            TimeUnit.MILLISECONDS.sleep(10);
+                        } catch (InterruptedException e) {
+                            logger.info("事件处理线程被中断");
+                            Thread.currentThread().interrupt();
+                            break;
+                        } catch (Exception e) {
+                            logger.error("事件处理失败", e);
+                        }
+                    }
+                } finally {
+                    logger.info("事件处理线程已退出");
+                }
+            });
         }
 
-        mainTaskFuture = singleThreadExecutor.submit(() -> {
-            registerEventHandlers();
-            state.start();
-            logger.info("跨币安和Bitget现货BTC套利策略启动成功（单线程事件驱动模式）");
-            logger.info("策略参数: {}", params);
+        // 启动策略执行线程
+        if (strategyExecutorService != null) {
+            strategyTaskFuture = strategyExecutorService.submit(() -> {
+                try {
+                    while (state.isRunning() && state.getCurrentTime() < params.getRunTime()) {
+                        try {
+                            // 更新当前时间
+                            state.updateState();
 
-            try {
-                while (state.isRunning() && state.getCurrentTime() < params.getRunTime()) {
-                    try {
-                        // 1. 接收市场数据事件（非阻塞模式，超时10ms）
-                        Event<MarketData> event = marketDataRepo.receive();
+                            // 执行策略逻辑
+                            executeStrategy();
 
-                        if (event != null) {
-                            // 2. 处理事件并更新状态
-                            EventHandler<MarketData> handler = eventHandlerRepo.queryBy(event.type);
-                            if (handler != null) {
-                                handler.handle(event);
-
-                                // 3. 事件处理后立即尝试执行策略（事件驱动）
-                                // 使用纳秒级精度时间戳控制执行频率
-                                long currentTimeNanos = System.nanoTime();
-                                long intervalNanos = params.getCheckInterval() * 1_000_000L; // 转换为纳秒
-
-                                if (currentTimeNanos - lastStrategyExecutionTime >= intervalNanos) {
-                                    state.updateState();
-                                    executeStrategy();
-                                    lastStrategyExecutionTime = currentTimeNanos;
-                                }
-                            } else {
-                                logger.debug("未找到事件处理器: {}", event.type);
-                            }
-                        } else {
-                            // 4. 无事件时短暂休眠，避免CPU空转
-                            TimeUnit.MILLISECONDS.sleep(1);
+                            // 等待下一次执行
+                            TimeUnit.MILLISECONDS.sleep(params.getCheckInterval());
+                        } catch (InterruptedException e) {
+                            logger.info("策略执行线程被中断");
+                            Thread.currentThread().interrupt();
+                            break;
+                        } catch (Exception e) {
+                            logger.error("策略执行失败", e);
                         }
-                    } catch (InterruptedException e) {
-                        logger.info("策略主线程被中断");
-                        Thread.currentThread().interrupt();
-                        break;
-                    } catch (Exception e) {
-                        logger.error("事件处理或策略执行失败", e);
                     }
-                }
 
-                state.stop();
-                logger.info("策略执行完成");
-            } finally {
-                logger.info("策略主线程已退出");
-            }
-        });
+                    state.stop();
+                    logger.info("策略执行完成");
+                } finally {
+                    logger.info("策略执行线程已退出");
+                }
+            });
+        }
     }
 
     /**

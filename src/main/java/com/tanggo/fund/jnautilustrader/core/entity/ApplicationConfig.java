@@ -1,6 +1,5 @@
-package com.tanggo.fund.jnautilustrader;
+package com.tanggo.fund.jnautilustrader.core.entity;
 
-import com.tanggo.fund.jnautilustrader.core.entity.Actor;
 import lombok.Data;
 import org.springframework.context.annotation.Configuration;
 
