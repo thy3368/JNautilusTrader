@@ -400,6 +400,7 @@ public class CrossAppService implements Actor {
     /**
      * 处理币安交易Tick事件
      */
+    //todo 任何一个EventHandler 成功失败 都应该有info日志
     private class BinanceTradeTickEventHandler implements EventHandler<MarketData> {
         @Override
         public void handle(Event<MarketData> event) {
