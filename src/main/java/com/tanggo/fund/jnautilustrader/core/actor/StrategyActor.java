@@ -440,6 +440,7 @@ public class StrategyActor<T, S> implements MessageActor<T> {
     @Override
     public void start() {
         if (running.compareAndSet(false, true)) {
+            status = ActorStatus.RUNNING;
             executor.submit(this);
         }
     }
