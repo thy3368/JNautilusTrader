@@ -86,17 +86,17 @@ public class CrossActor {
         };
 
         // 启动回调
-        StartHandler startHandler = () -> {
+        StartHandler startHandler = (state) -> {
             log.debug("StrategyActor 启动完成");
-            actor.setState(actor.getState());
-            actor.getState().start();
+            state.setState(state.getState());
+            state.getState().start();
         };
 
         // 停止回调
-        StopHandler stopHandler = () -> {
+        StopHandler stopHandler = (state) -> {
             log.debug("StrategyActor 停止完成");
-            actor.getState().stop();
-            printStrategySummary(actor.getState());
+            state.getState().stop();
+            printStrategySummary(state.getState());
         };
 
         return new StrategyActor<>(messageHandler, initialState, errorHandler, startHandler, stopHandler);
