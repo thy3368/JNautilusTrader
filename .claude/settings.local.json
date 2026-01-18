@@ -10,7 +10,8 @@
       "Bash(nslookup:*)",
       "Bash(mvn clean install:*)",
       "Bash(mvn exec:java:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(mvn clean compile:*)"
     ]
   }
 }
