@@ -168,6 +168,7 @@ public class StrategyActor<T, S> implements MessageActor<T> {
         void handle(Exception e);
     }
 
+    //todo 可以被注入
     private final BlockingQueue<T> mailbox = new LinkedBlockingQueue<>();
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
