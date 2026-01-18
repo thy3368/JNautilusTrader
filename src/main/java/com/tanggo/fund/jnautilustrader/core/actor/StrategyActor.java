@@ -169,12 +169,12 @@ public class StrategyActor<T, S> implements MessageActor<T> {
     }
 
     // 启动完成回调接口
-    public interface StartHandler {
+    public interface StartHandler<S> {
         void onStart(State<S> state);
     }
 
     // 停止完成回调接口
-    public interface StopHandler {
+    public interface StopHandler<S> {
         void onStop(State<S> state);
     }
 
