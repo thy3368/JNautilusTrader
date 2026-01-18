@@ -1,12 +1,17 @@
 package com.tanggo.fund.jnautilustrader.stragety.c2;
 
-import com.tanggo.fund.jnautilustrader.core.actor.StrategyActor;
-import com.tanggo.fund.jnautilustrader.core.actor.StrategyActor.*;
 import com.tanggo.fund.jnautilustrader.core.actor.MessageActor.ActorStatus;
-import com.tanggo.fund.jnautilustrader.core.entity.*;
-import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDepth10;
-import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDeltas;
+import com.tanggo.fund.jnautilustrader.core.actor.StrategyActor;
+import com.tanggo.fund.jnautilustrader.core.actor.StrategyActor.ErrorHandler;
+import com.tanggo.fund.jnautilustrader.core.actor.StrategyActor.MessageHandler;
+import com.tanggo.fund.jnautilustrader.core.actor.StrategyActor.State;
+import com.tanggo.fund.jnautilustrader.core.entity.Event;
+import com.tanggo.fund.jnautilustrader.core.entity.EventRepo;
+import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
+import com.tanggo.fund.jnautilustrader.core.entity.TradeCmd;
 import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDelta;
+import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDeltas;
+import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDepth10;
 import com.tanggo.fund.jnautilustrader.core.entity.data.TradeTick;
 import com.tanggo.fund.jnautilustrader.core.entity.trade.PlaceOrder;
 import com.tanggo.fund.jnautilustrader.stragety.cross.CrossArbitrageParams;
@@ -15,10 +20,10 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * 跨币安和Bitget现货BTC交易套利策略 - StrategyActor实现
- *
+ * <p>
  * 该策略通过同时监控两个交易所的实时市场数据，
  * 当发现价格差异超过设定阈值时，执行低买高卖的套利操作。
- *
+ * <p>
  * 核心功能：
  * - 实时监控币安和Bitget的BTC/USDT现货价格
  * - 计算价格差异和潜在利润
@@ -69,7 +74,7 @@ public class CrossActor {
 
             // 根据事件类型处理
             if (message instanceof Event && message.payload != null) {
-                handleMarketDataEvent((Event<MarketData>) message, state);
+                handleMarketDataEvent(message, state);
             }
         };
 
@@ -337,9 +342,7 @@ public class CrossActor {
      */
     private void executeStrategy(CrossArbitrageState currentState, State<CrossArbitrageState> state) {
         log.debug("执行策略检查 - 开始");
-        log.debug("市场数据状态: Binance买价={}, Binance卖价={}, Binance中间价={}, Bitget买价={}, Bitget卖价={}, Bitget中间价={}",
-                currentState.getBinanceBidPrice(), currentState.getBinanceAskPrice(), currentState.getBinanceMidPrice(),
-                currentState.getBitgetBidPrice(), currentState.getBitgetAskPrice(), currentState.getBitgetMidPrice());
+        log.debug("市场数据状态: Binance买价={}, Binance卖价={}, Binance中间价={}, Bitget买价={}, Bitget卖价={}, Bitget中间价={}", currentState.getBinanceBidPrice(), currentState.getBinanceAskPrice(), currentState.getBinanceMidPrice(), currentState.getBitgetBidPrice(), currentState.getBitgetAskPrice(), currentState.getBitgetMidPrice());
 
         // 计算价格差异
         double spreadPercentage = currentState.calculateSpreadPercentage();
@@ -365,10 +368,8 @@ public class CrossActor {
     /**
      * 执行套利操作
      */
-    private void executeArbitrage(String buyExchange, String sellExchange, double buyPrice, double sellPrice,
-                                  CrossArbitrageState currentState, State<CrossArbitrageState> state) {
-        log.info("发现套利机会: {}买入价={}, {}卖出价={}", buyExchange, String.format("%.2f", buyPrice),
-                sellExchange, String.format("%.2f", sellPrice));
+    private void executeArbitrage(String buyExchange, String sellExchange, double buyPrice, double sellPrice, CrossArbitrageState currentState, State<CrossArbitrageState> state) {
+        log.info("发现套利机会: {}买入价={}, {}卖出价={}", buyExchange, String.format("%.2f", buyPrice), sellExchange, String.format("%.2f", sellPrice));
 
         // 计算套利成本和收益
         double buyCost = params.calculateTotalCost(buyPrice, params.getOrderQuantity(), buyExchange);
@@ -502,6 +503,7 @@ public class CrossActor {
         actor.start();
 
         // 启动状态
+        //todo 这两个调用应该放到 actor start 的callback里面
         actor.setState(actor.getState());
         actor.getState().start();
     }
@@ -511,8 +513,11 @@ public class CrossActor {
      */
     public void stop() {
         log.info("正在停止策略...");
-        actor.getState().stop();
         actor.close();
+
+
+        //todo 这两个调用应该放到 actor stop的callback里面
+        actor.getState().stop();
 
         // 打印策略执行结果摘要
         printStrategySummary(actor.getState());
