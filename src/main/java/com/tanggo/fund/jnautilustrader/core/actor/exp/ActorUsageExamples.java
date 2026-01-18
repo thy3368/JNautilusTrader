@@ -2,6 +2,7 @@ package com.tanggo.fund.jnautilustrader.core.actor.exp;
 
 
 import com.tanggo.fund.jnautilustrader.core.actor.StrategyActor;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 非继承Actor实现方式的使用示例
@@ -20,6 +21,9 @@ public class ActorUsageExamples {
      * 演示StrategyActor（策略模式）的使用
      */
     private static void demoStrategyActor() {
+        // 使用 AtomicReference 来允许内部类修改和访问外部变量
+        final AtomicReference<StrategyActor<Object, String>> actorRef = new AtomicReference<>();
+
         // 1. 先创建消息处理器（避免内部类访问未初始化变量）
         StrategyActor.MessageHandler<Object, String> messageHandler = new StrategyActor.MessageHandler<Object, String>() {
             @Override
@@ -29,8 +33,11 @@ public class ActorUsageExamples {
                 // 示例：处理请求-响应消息
                 if (message instanceof RequestMessage request) {
                     String response = "Pong from StrategyActor!";
-                    // 注意：这里无法直接访问外部actor变量，因为会有初始化问题
-                    // 如果需要回复功能，需要通过其他方式传递actor引用
+                    // 使用 AtomicReference 访问 actor 引用
+                    StrategyActor<Object, String> actor = actorRef.get();
+                    if (actor != null) {
+                        actor.reply(request.getRequestId(), response);
+                    }
                 }
 
                 // 更新状态
@@ -47,6 +54,7 @@ public class ActorUsageExamples {
 
         // 2. 使用策略接口创建Actor（处理Object类型的消息）
         StrategyActor<Object, String> actor = new StrategyActor<>(messageHandler, "初始状态", errorHandler);
+        actorRef.set(actor);  // 初始化完成后设置引用
 
         // 3. 启动Actor
         actor.start();
@@ -55,10 +63,9 @@ public class ActorUsageExamples {
         actor.tell("Hello from StrategyActor!");
         actor.tell("这是另一个测试消息");
 
-        // 5. 发送请求-响应消息（注意：由于内部类访问外部变量问题，这里不演示reply功能）
+        // 5. 发送请求-响应消息（现在可以正常工作）
         try {
             DefaultRequestMessage request = new DefaultRequestMessage("Ping");
-            // 由于内部类访问外部变量的限制，这里的ask可能不会收到回复
             String response = actor.ask(request, String.class, 1000);
             System.out.println("收到响应: " + response);
         } catch (InterruptedException e) {

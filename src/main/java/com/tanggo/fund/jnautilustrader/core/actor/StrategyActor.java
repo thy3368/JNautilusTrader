@@ -178,11 +178,15 @@ public class StrategyActor<T, S> implements MessageActor<T> {
         void handle(State<S> state);
     }
 
+    private final AtomicBoolean running = new AtomicBoolean(false);
+    private volatile ActorStatus status = ActorStatus.IDLE;
+
     //todo 可以被注入
     private final BlockingQueue<T> mailbox = new LinkedBlockingQueue<>();
-    private final AtomicBoolean running = new AtomicBoolean(false);
+
+
+    //todo 可以被注入
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
-    private volatile ActorStatus status = ActorStatus.IDLE;
 
     // 用于存储请求-响应的未来结果
     private final ConcurrentMap<String, CompletableFuture<Object>> responseFutures = new ConcurrentHashMap<>();
@@ -190,8 +194,8 @@ public class StrategyActor<T, S> implements MessageActor<T> {
     // 策略接口实现
     private final MessageHandler<T, S> messageHandler;
     private final ErrorHandler errorHandler;
-    private final StartHandler startHandler;  // 新增启动回调
-    private final StopHandler stopHandler;    // 新增停止回调
+    private final StartHandler<S> startHandler;  // 新增启动回调
+    private final StopHandler<S> stopHandler;    // 新增停止回调
 
     // 状态管理
     private final State<S> state;
@@ -331,21 +335,7 @@ public class StrategyActor<T, S> implements MessageActor<T> {
         }
     }
 
-    /**
-     * 从持久化存储加载状态
-     */
-    public void loadState() {
-        try {
-            if (!(persister instanceof NoOpPersister)) {
-                S loadedState = persister.load();
-                if (loadedState != null) {
-                    state.setState(loadedState);
-                }
-            }
-        } catch (Exception e) {
-            errorHandler.handle(e);
-        }
-    }
+
 
     /**
      * 检查是否支持状态持久化
@@ -376,17 +366,7 @@ public class StrategyActor<T, S> implements MessageActor<T> {
         }
     }
 
-    /**
-     * 重置状态
-     */
-    public void resetState() {
-        state.reset();
-        try {
-            persister.delete();
-        } catch (Exception e) {
-            errorHandler.handle(e);
-        }
-    }
+
 
     @Override
     public void tell(T message) {
