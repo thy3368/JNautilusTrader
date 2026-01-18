@@ -170,12 +170,12 @@ public class StrategyActor<T, S> implements MessageActor<T> {
 
     // 启动完成回调接口
     public interface StartHandler<S> {
-        void onStart(State<S> state);
+        void handle(State<S> state);
     }
 
     // 停止完成回调接口
     public interface StopHandler<S> {
-        void onStop(State<S> state);
+        void handle(State<S> state);
     }
 
     //todo 可以被注入
@@ -459,7 +459,7 @@ public class StrategyActor<T, S> implements MessageActor<T> {
         // 调用启动回调
         if (startHandler != null) {
             try {
-                startHandler.onStart(state);
+                startHandler.handle(state);
             } catch (Exception e) {
                 errorHandler.handle(e);
             }
@@ -489,7 +489,7 @@ public class StrategyActor<T, S> implements MessageActor<T> {
         // 调用停止回调
         if (stopHandler != null) {
             try {
-                stopHandler.onStop(state);
+                stopHandler.handle(state);
             } catch (Exception e) {
                 errorHandler.handle(e);
             }
