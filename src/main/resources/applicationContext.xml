@@ -1,20 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<beans xmlns="http://www.springframework.org/schema/beans"
-       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<beans xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
        xmlns:context="http://www.springframework.org/schema/context"
+       xmlns="http://www.springframework.org/schema/beans"
        xsi:schemaLocation="
         http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
         http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd">
 
     <!-- 启用组件扫描 - 会自动扫描@Component注解的类,但排除WebSocket客户端(手动注册) -->
     <context:component-scan base-package="com.tanggo.fund.jnautilustrader">
-        <context:exclude-filter type="regex" expression="com\.tanggo\.fund\.jnautilustrader\.adapter\.(mdgw|tradegw)\..*WebSocketClient"/>
+        <context:exclude-filter type="regex"
+                                expression="com\.tanggo\.fund\.jnautilustrader\.adapter\.(mdgw|tradegw)\..*WebSocketClient"/>
     </context:component-scan>
 
     <!-- ==================== StrategyConfig - 策略配置 ==================== -->
 
     <!-- StrategyConfig配置 - 配置市场数据客户端、交易客户端和策略 -->
-    <bean id="serviceConfig" class="com.tanggo.fund.jnautilustrader.core.entity.ApplicationConfig">
+    <bean id="crossAppServiceConfig" class="com.tanggo.fund.jnautilustrader.core.entity.ApplicationConfig">
         <!-- 市场数据客户端列表 -->
         <property name="mdClients">
             <list>
@@ -36,17 +37,20 @@
     <!-- ==================== CrossStrategyConfig - 跨交易所策略配置 ==================== -->
 
     <!-- 市场数据事件仓库 -->
-    <bean id="marketDataEventRepo" class="com.tanggo.fund.jnautilustrader.adapter.event_repo.event.BlockingQueueEventRepo">
+    <bean id="marketDataEventRepo"
+          class="com.tanggo.fund.jnautilustrader.adapter.event_repo.event.BlockingQueueEventRepo">
         <!-- 类型参数通过构造函数或setter注入，这里使用无参构造 -->
     </bean>
 
     <!-- 交易指令事件仓库 -->
-    <bean id="tradeCmdEventRepo" class="com.tanggo.fund.jnautilustrader.adapter.event_repo.event.BlockingQueueEventRepo">
+    <bean id="tradeCmdEventRepo"
+          class="com.tanggo.fund.jnautilustrader.adapter.event_repo.event.BlockingQueueEventRepo">
         <!-- 类型参数通过构造函数或setter注入，这里使用无参构造 -->
     </bean>
 
     <!-- 事件处理器仓库 -->
-    <bean id="eventHandlerRepo" class="com.tanggo.fund.jnautilustrader.adapter.event_repo.handler.HashMapEventHandlerRepo"/>
+    <bean id="eventHandlerRepo"
+          class="com.tanggo.fund.jnautilustrader.adapter.event_repo.handler.HashMapEventHandlerRepo"/>
 
     <!-- 跨交易所套利参数 -->
     <bean id="crossArbitrageParams" class="com.tanggo.fund.jnautilustrader.stragety.cross.CrossArbitrageParams"
@@ -57,9 +61,9 @@
         <property name="params" ref="crossArbitrageParams"/>
         <property name="marketDataRepo" ref="marketDataEventRepo"/>
         <property name="tradeCmdRepo" ref="tradeCmdEventRepo"/>
-<!--        <property name="eventHandlerRepo" ref="eventHandlerRepo"/>-->
+        <!--        <property name="eventHandlerRepo" ref="eventHandlerRepo"/>-->
         <property name="singleThreadExecutor" ref="singleThreadExecutorService"/>
-<!--        <property name="eventExecutorService" ref="eventExecutorService"/>-->
+        <!--        <property name="eventExecutorService" ref="eventExecutorService"/>-->
     </bean>
 
     <!-- 币安市场数据网关WebSocket客户端 -->
@@ -70,7 +74,8 @@
     </bean>
 
     <!-- 币安交易网关WebSocket客户端 -->
-    <bean id="bnTradeGWWebSocketClient" class="com.tanggo.fund.jnautilustrader.adapter.tradegw.bn.BNTradeGWWebSocketClient">
+    <bean id="bnTradeGWWebSocketClient"
+          class="com.tanggo.fund.jnautilustrader.adapter.tradegw.bn.BNTradeGWWebSocketClient">
         <constructor-arg ref="marketDataEventRepo"/>
         <constructor-arg ref="tradeCmdEventRepo"/>
         <constructor-arg ref="timerExecutorService"/>
@@ -83,7 +88,8 @@
     </bean>
 
     <!-- Bitget交易网关WebSocket客户端 -->
-    <bean id="btTradeGWWebSocketClient" class="com.tanggo.fund.jnautilustrader.adapter.tradegw.bitget.BTTradeGWWebSocketClient">
+    <bean id="btTradeGWWebSocketClient"
+          class="com.tanggo.fund.jnautilustrader.adapter.tradegw.bitget.BTTradeGWWebSocketClient">
         <constructor-arg ref="marketDataEventRepo"/>
         <constructor-arg ref="tradeCmdEventRepo"/>
         <constructor-arg ref="timerExecutorService"/>
@@ -111,7 +117,8 @@
     </bean>
 
     <!-- 市场数据处理线程工厂 -->
-    <bean id="marketDataProcessorThreadFactory" class="org.springframework.scheduling.concurrent.CustomizableThreadFactory">
+    <bean id="marketDataProcessorThreadFactory"
+          class="org.springframework.scheduling.concurrent.CustomizableThreadFactory">
         <constructor-arg value="md-processor-"/>
     </bean>
 
@@ -231,7 +238,8 @@
     </bean>
 
     <!-- 单线程执行器 -->
-    <bean id="singleThreadExecutorService" class="java.util.concurrent.Executors" factory-method="newSingleThreadExecutor">
+    <bean id="singleThreadExecutorService" class="java.util.concurrent.Executors"
+          factory-method="newSingleThreadExecutor">
         <constructor-arg ref="ioThreadFactory"/>
     </bean>
 
@@ -253,9 +261,5 @@
         </constructor-arg>
     </bean>
 
-    <!-- ==================== Process - 系统进程管理器 ==================== -->
-    <bean id="process" class="com.tanggo.fund.jnautilustrader.Process">
-        <property name="applicationConfig" ref="serviceConfig"/>
-    </bean>
 
 </beans>

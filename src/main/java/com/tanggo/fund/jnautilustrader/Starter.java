@@ -1,5 +1,6 @@
 package com.tanggo.fund.jnautilustrader;
 
+import com.tanggo.fund.jnautilustrader.core.entity.ApplicationConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
@@ -16,8 +17,7 @@ public class Starter {
 
     public static void main(String[] args) {
         ApplicationContext context = null;
-        Process process = null;
-
+        ApplicationConfig applicationConfig = null;
         try {
             // 确定配置文件路径
             String configLocation = args.length > 0 ? args[0] : DEFAULT_CONFIG_LOCATION;
@@ -27,18 +27,19 @@ public class Starter {
             context = new ClassPathXmlApplicationContext(configLocation);
             logger.info("Spring容器初始化成功");
 
-            // 从Spring容器中获取Process实例
-            process = context.getBean(Process.class);
-            logger.info("获取Process实例成功: {}", process.getClass().getName());
+            // 从Spring容器中获取策略应用实例，可以获取任何实例
+            applicationConfig = context.getBean("crossAppServiceConfig", ApplicationConfig.class);
+
+            logger.info("获取applicationConfig实例成功: {}", applicationConfig.getClass().getName());
 
             // 注册JVM关闭钩子，确保优雅关闭
-            registerShutdownHook(process, context);
+            registerShutdownHook(applicationConfig, context);
 
             // 启动交易系统
             logger.info("======================================");
             logger.info("开始启动交易系统...");
             logger.info("======================================");
-            process.start();
+            applicationConfig.start();
 
             // 保持主线程运行
             keepAlive();
@@ -47,9 +48,9 @@ public class Starter {
             logger.error("交易系统启动失败", e);
 
             // 尝试关闭Process
-            if (process != null) {
+            if (applicationConfig != null) {
                 try {
-                    process.stop();
+                    applicationConfig.stop();
                 } catch (Exception ex) {
                     logger.error("停止Process失败", ex);
                 }
@@ -67,7 +68,7 @@ public class Starter {
     /**
      * 注册JVM关闭钩子，确保优雅关闭
      */
-    private static void registerShutdownHook(final Process process, final ApplicationContext context) {
+    private static void registerShutdownHook(final ApplicationConfig process, final ApplicationContext context) {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             logger.info("======================================");
             logger.info("收到关闭信号，开始优雅关闭...");
