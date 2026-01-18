@@ -55,6 +55,12 @@ public class CrossActorTest {
 
         // 测试启动策略
         actor.start();
+        // 等待启动回调执行
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         assertTrue(actor.getState().isRunning(), "策略启动后应处于运行状态");
         assertEquals("策略运行中", actor.getState().getStatusInfo());
         assertNotNull(actor.getState().getParams(), "策略参数不应为null");
@@ -73,6 +79,12 @@ public class CrossActorTest {
 
         // 测试启动
         actor.start();
+        // 等待启动回调执行
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         assertEquals("RUNNING", actor.getActorStatus().toString(), "Actor 启动后应为 RUNNING 状态");
 
         logger.info("Actor 状态测试通过");
@@ -107,10 +119,22 @@ public class CrossActorTest {
 
         // 启动策略
         actor.start();
+        // 等待启动回调执行
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         assertTrue(actor.getState().isRunning());
 
         // 停止策略
         actor.stop();
+        // 等待停止回调执行
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         assertFalse(actor.getState().isRunning());
         assertEquals("策略已停止", actor.getState().getStatusInfo());
 

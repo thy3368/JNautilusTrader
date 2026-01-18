@@ -5,6 +5,8 @@ import com.tanggo.fund.jnautilustrader.core.actor.StrategyActor;
 import com.tanggo.fund.jnautilustrader.core.actor.StrategyActor.ErrorHandler;
 import com.tanggo.fund.jnautilustrader.core.actor.StrategyActor.MessageHandler;
 import com.tanggo.fund.jnautilustrader.core.actor.StrategyActor.State;
+import com.tanggo.fund.jnautilustrader.core.actor.StrategyActor.StartHandler;
+import com.tanggo.fund.jnautilustrader.core.actor.StrategyActor.StopHandler;
 import com.tanggo.fund.jnautilustrader.core.entity.Event;
 import com.tanggo.fund.jnautilustrader.core.entity.EventRepo;
 import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
@@ -83,7 +85,21 @@ public class CrossActor {
             log.error("策略Actor处理消息时出错: {}", e.getMessage(), e);
         };
 
-        return new StrategyActor<>(messageHandler, initialState, errorHandler);
+        // 启动回调
+        StartHandler startHandler = () -> {
+            log.debug("StrategyActor 启动完成");
+            actor.setState(actor.getState());
+            actor.getState().start();
+        };
+
+        // 停止回调
+        StopHandler stopHandler = () -> {
+            log.debug("StrategyActor 停止完成");
+            actor.getState().stop();
+            printStrategySummary(actor.getState());
+        };
+
+        return new StrategyActor<>(messageHandler, initialState, errorHandler, startHandler, stopHandler);
     }
 
     /**
@@ -501,11 +517,6 @@ public class CrossActor {
 
         // 启动Actor
         actor.start();
-
-        // 启动状态
-        //todo 这两个调用应该放到 actor start 的callback里面
-        actor.setState(actor.getState());
-        actor.getState().start();
     }
 
     /**
@@ -514,13 +525,6 @@ public class CrossActor {
     public void stop() {
         log.info("正在停止策略...");
         actor.close();
-
-
-        //todo 这两个调用应该放到 actor stop的callback里面
-        actor.getState().stop();
-
-        // 打印策略执行结果摘要
-        printStrategySummary(actor.getState());
     }
 
     /**

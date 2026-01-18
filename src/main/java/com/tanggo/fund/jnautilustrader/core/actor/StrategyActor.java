@@ -168,6 +168,19 @@ public class StrategyActor<T, S> implements MessageActor<T> {
         void handle(Exception e);
     }
 
+    // 启动完成回调接口
+    public interface StartHandler {
+     //todo 重构成这样   void onStart(State<S> state);
+
+        void onStart();
+    }
+
+    // 停止完成回调接口
+    public interface StopHandler {
+        //todo 重构成这样   void onStop(State<S> state);
+        void onStop();
+    }
+
     //todo 可以被注入
     private final BlockingQueue<T> mailbox = new LinkedBlockingQueue<>();
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -180,6 +193,8 @@ public class StrategyActor<T, S> implements MessageActor<T> {
     // 策略接口实现
     private final MessageHandler<T, S> messageHandler;
     private final ErrorHandler errorHandler;
+    private final StartHandler startHandler;  // 新增启动回调
+    private final StopHandler stopHandler;    // 新增停止回调
 
     // 状态管理
     private final State<S> state;
@@ -246,6 +261,20 @@ public class StrategyActor<T, S> implements MessageActor<T> {
     }
 
     /**
+     * 构造函数（带状态管理、错误处理和回调支持）
+     * @param messageHandler 消息处理策略
+     * @param initialState 初始状态
+     * @param errorHandler 错误处理策略
+     * @param startHandler 启动完成回调
+     * @param stopHandler 停止完成回调
+     */
+    public StrategyActor(MessageHandler<T, S> messageHandler, S initialState, ErrorHandler errorHandler,
+                         StartHandler startHandler, StopHandler stopHandler) {
+        this(messageHandler, new DefaultState<>(initialState), new NoOpPersister<>(), true, errorHandler,
+                startHandler, stopHandler);
+    }
+
+    /**
      * 构造函数（带自定义状态管理和持久化支持）
      * @param messageHandler 消息处理策略
      * @param state 状态管理器
@@ -254,8 +283,25 @@ public class StrategyActor<T, S> implements MessageActor<T> {
      * @param errorHandler 错误处理策略
      */
     public StrategyActor(MessageHandler<T, S> messageHandler, State<S> state, StatePersister<S> persister, boolean autoPersist, ErrorHandler errorHandler) {
+        this(messageHandler, state, persister, autoPersist, errorHandler, null, null);
+    }
+
+    /**
+     * 构造函数（带所有回调支持）
+     * @param messageHandler 消息处理策略
+     * @param state 状态管理器
+     * @param persister 状态持久化器
+     * @param autoPersist 是否自动持久化
+     * @param errorHandler 错误处理策略
+     * @param startHandler 启动完成回调
+     * @param stopHandler 停止完成回调
+     */
+    public StrategyActor(MessageHandler<T, S> messageHandler, State<S> state, StatePersister<S> persister, boolean autoPersist, ErrorHandler errorHandler,
+                         StartHandler startHandler, StopHandler stopHandler) {
         this.messageHandler = messageHandler;
         this.errorHandler = errorHandler;
+        this.startHandler = startHandler;
+        this.stopHandler = stopHandler;
         this.state = state;
         this.persister = persister;
         this.autoPersist = autoPersist;
@@ -413,6 +459,15 @@ public class StrategyActor<T, S> implements MessageActor<T> {
         status = ActorStatus.RUNNING;
         running.set(true);
 
+        // 调用启动回调
+        if (startHandler != null) {
+            try {
+                startHandler.onStart();
+            } catch (Exception e) {
+                errorHandler.handle(e);
+            }
+        }
+
         while (running.get() && !Thread.currentThread().isInterrupted()) {
             try {
                 T message = mailbox.take();
@@ -431,6 +486,15 @@ public class StrategyActor<T, S> implements MessageActor<T> {
                 break;
             } catch (Exception e) {
                 errorHandler.handle(e);  // 调用策略接口
+            }
+        }
+
+        // 调用停止回调
+        if (stopHandler != null) {
+            try {
+                stopHandler.onStop();
+            } catch (Exception e) {
+                errorHandler.handle(e);
             }
         }
 
