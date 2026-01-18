@@ -86,21 +86,6 @@ public class StrategyActorExample {
                 this.value = "重置状态";
                 this.counter = 0;
             }
-
-            @Override
-            public void persist() throws Exception {
-                System.out.println("自定义状态持久化: " + getState());
-            }
-
-            @Override
-            public void load() throws Exception {
-                System.out.println("自定义状态加载");
-            }
-
-            @Override
-            public boolean supportsPersistence() {
-                return false; // 自定义状态管理器不支持持久化
-            }
         };
 
         // 消息处理策略

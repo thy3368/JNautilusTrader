@@ -106,6 +106,7 @@ public class StrategyActor<T, S> implements MessageActor<T> {
     }
 
     // 状态管理接口
+    //todo StatePersister与State接口 是不是可以合并哦？State没必要存在？
     public interface State<S> {
         /**
          * 获取当前状态
@@ -126,98 +127,6 @@ public class StrategyActor<T, S> implements MessageActor<T> {
          * 重置状态
          */
         void reset();
-
-        /**
-         * 持久化当前状态
-         */
-        void persist() throws Exception;
-
-        /**
-         * 从持久化存储加载状态
-         */
-        void load() throws Exception;
-
-        /**
-         * 检查是否支持持久化
-         */
-        boolean supportsPersistence();
-    }
-
-    // 可持久化状态包装器
-    public static class PersistentStateWrapper<S> implements State<S> {
-        private final State<S> delegate;
-        private final StatePersister<S> persister;
-        private final boolean autoPersist;
-
-        public PersistentStateWrapper(State<S> delegate, StatePersister<S> persister) {
-            this(delegate, persister, true);
-        }
-
-        public PersistentStateWrapper(State<S> delegate, StatePersister<S> persister, boolean autoPersist) {
-            this.delegate = delegate;
-            this.persister = persister;
-            this.autoPersist = autoPersist;
-        }
-
-        @Override
-        public S getState() {
-            return delegate.getState();
-        }
-
-        @Override
-        public void setState(S state) {
-            delegate.setState(state);
-            if (autoPersist) {
-                try {
-                    persister.save(state);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        @Override
-        public void initialize() {
-            try {
-                if (persister.exists()) {
-                    S loadedState = persister.load();
-                    if (loadedState != null) {
-                        delegate.setState(loadedState);
-                    }
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            delegate.initialize();
-        }
-
-        @Override
-        public void reset() {
-            delegate.reset();
-            try {
-                persister.delete();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-
-        @Override
-        public void persist() throws Exception {
-            persister.save(delegate.getState());
-        }
-
-        @Override
-        public void load() throws Exception {
-            S loadedState = persister.load();
-            if (loadedState != null) {
-                delegate.setState(loadedState);
-            }
-        }
-
-        @Override
-        public boolean supportsPersistence() {
-            return !(persister instanceof NoOpPersister);
-        }
     }
 
     // 默认状态实现
@@ -247,23 +156,6 @@ public class StrategyActor<T, S> implements MessageActor<T> {
         public void reset() {
             this.state = null;
         }
-
-        @Override
-        public void persist() throws Exception {
-            // 默认不支持持久化
-            throw new UnsupportedOperationException("持久化操作未实现");
-        }
-
-        @Override
-        public void load() throws Exception {
-            // 默认不支持加载
-            throw new UnsupportedOperationException("加载操作未实现");
-        }
-
-        @Override
-        public boolean supportsPersistence() {
-            return false;
-        }
     }
 
     // 消息处理策略接口（带状态访问）
@@ -291,6 +183,11 @@ public class StrategyActor<T, S> implements MessageActor<T> {
     // 状态管理
     private final State<S> state;
 
+    // 状态持久化器
+    private final StatePersister<S> persister;
+
+    // 是否自动持久化
+    private final boolean autoPersist;
 
     /**
      * 构造函数（带初始状态）
@@ -298,7 +195,7 @@ public class StrategyActor<T, S> implements MessageActor<T> {
      * @param initialState 初始状态
      */
     public StrategyActor(MessageHandler<T, S> messageHandler, S initialState) {
-        this(messageHandler, initialState, e -> {
+        this(messageHandler, initialState, new NoOpPersister<>(), true, e -> {
             System.err.println("Actor处理消息时出错: " + e.getMessage());
             e.printStackTrace();
         });
@@ -311,10 +208,7 @@ public class StrategyActor<T, S> implements MessageActor<T> {
      * @param errorHandler 错误处理策略
      */
     public StrategyActor(MessageHandler<T, S> messageHandler, S initialState, ErrorHandler errorHandler) {
-        this.messageHandler = messageHandler;
-        this.errorHandler = errorHandler;
-        this.state = new DefaultState<>(initialState);
-        this.state.initialize();
+        this(messageHandler, initialState, new NoOpPersister<>(), true, errorHandler);
     }
 
     /**
@@ -324,10 +218,7 @@ public class StrategyActor<T, S> implements MessageActor<T> {
      * @param errorHandler 错误处理策略
      */
     public StrategyActor(MessageHandler<T, S> messageHandler, State<S> state, ErrorHandler errorHandler) {
-        this.messageHandler = messageHandler;
-        this.errorHandler = errorHandler;
-        this.state = state;
-        this.state.initialize();
+        this(messageHandler, state, new NoOpPersister<>(), true, errorHandler);
     }
 
     /**
@@ -338,10 +229,7 @@ public class StrategyActor<T, S> implements MessageActor<T> {
      * @param errorHandler 错误处理策略
      */
     public StrategyActor(MessageHandler<T, S> messageHandler, S initialState, StatePersister<S> persister, ErrorHandler errorHandler) {
-        this.messageHandler = messageHandler;
-        this.errorHandler = errorHandler;
-        this.state = new PersistentStateWrapper<>(new DefaultState<>(initialState), persister);
-        this.state.initialize();
+        this(messageHandler, new DefaultState<>(initialState), persister, true, errorHandler);
     }
 
     /**
@@ -353,10 +241,37 @@ public class StrategyActor<T, S> implements MessageActor<T> {
      * @param errorHandler 错误处理策略
      */
     public StrategyActor(MessageHandler<T, S> messageHandler, S initialState, StatePersister<S> persister, boolean autoPersist, ErrorHandler errorHandler) {
+        this(messageHandler, new DefaultState<>(initialState), persister, autoPersist, errorHandler);
+    }
+
+    /**
+     * 构造函数（带自定义状态管理和持久化支持）
+     * @param messageHandler 消息处理策略
+     * @param state 状态管理器
+     * @param persister 状态持久化器
+     * @param autoPersist 是否自动持久化
+     * @param errorHandler 错误处理策略
+     */
+    public StrategyActor(MessageHandler<T, S> messageHandler, State<S> state, StatePersister<S> persister, boolean autoPersist, ErrorHandler errorHandler) {
         this.messageHandler = messageHandler;
         this.errorHandler = errorHandler;
-        this.state = new PersistentStateWrapper<>(new DefaultState<>(initialState), persister, autoPersist);
-        this.state.initialize();
+        this.state = state;
+        this.persister = persister;
+        this.autoPersist = autoPersist;
+
+        // 初始化时尝试加载持久化状态
+        try {
+            if (persister.exists()) {
+                S loadedState = persister.load();
+                if (loadedState != null) {
+                    state.setState(loadedState);
+                }
+            }
+        } catch (Exception e) {
+            errorHandler.handle(new RuntimeException("状态加载失败: " + e.getMessage(), e));
+        }
+
+        state.initialize();
     }
 
     /**
@@ -364,8 +279,8 @@ public class StrategyActor<T, S> implements MessageActor<T> {
      */
     public void persistState() {
         try {
-            if (state.supportsPersistence()) {
-                state.persist();
+            if (!(persister instanceof NoOpPersister)) {
+                persister.save(state.getState());
             }
         } catch (Exception e) {
             errorHandler.handle(e);
@@ -377,8 +292,11 @@ public class StrategyActor<T, S> implements MessageActor<T> {
      */
     public void loadState() {
         try {
-            if (state.supportsPersistence()) {
-                state.load();
+            if (!(persister instanceof NoOpPersister)) {
+                S loadedState = persister.load();
+                if (loadedState != null) {
+                    state.setState(loadedState);
+                }
             }
         } catch (Exception e) {
             errorHandler.handle(e);
@@ -389,7 +307,7 @@ public class StrategyActor<T, S> implements MessageActor<T> {
      * 检查是否支持状态持久化
      */
     public boolean supportsPersistence() {
-        return state.supportsPersistence();
+        return !(persister instanceof NoOpPersister);
     }
 
     /**
@@ -404,6 +322,14 @@ public class StrategyActor<T, S> implements MessageActor<T> {
      */
     public void setState(S newState) {
         state.setState(newState);
+        // 如果启用自动持久化，立即保存
+        if (autoPersist && !(persister instanceof NoOpPersister)) {
+            try {
+                persister.save(newState);
+            } catch (Exception e) {
+                errorHandler.handle(new RuntimeException("状态持久化失败: " + e.getMessage(), e));
+            }
+        }
     }
 
     /**
@@ -411,6 +337,11 @@ public class StrategyActor<T, S> implements MessageActor<T> {
      */
     public void resetState() {
         state.reset();
+        try {
+            persister.delete();
+        } catch (Exception e) {
+            errorHandler.handle(e);
+        }
     }
 
     @Override
@@ -486,13 +417,10 @@ public class StrategyActor<T, S> implements MessageActor<T> {
                 T message = mailbox.take();
                 messageHandler.handle(message, state);  // 调用策略接口（带状态）
 
-                //直接用 StatePersister.save方法重构 去掉 PersistentStateWrapper
-
-                //todo 直接用 StatePersister.save方法重构 去掉 PersistentStateWrapper
                 // 自动持久化状态（如果支持）
-                if (state.supportsPersistence()) {
+                if (autoPersist && !(persister instanceof NoOpPersister)) {
                     try {
-                        state.persist();
+                        persister.save(state.getState());
                     } catch (Exception e) {
                         errorHandler.handle(new RuntimeException("状态持久化失败: " + e.getMessage(), e));
                     }
