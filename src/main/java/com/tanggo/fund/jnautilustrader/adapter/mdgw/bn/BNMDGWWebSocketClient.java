@@ -244,6 +244,16 @@ public class BNMDGWWebSocketClient implements Actor {
 
     /**
      * 解析币安WebSocket返回的交易数据
+     *
+     * 官方文档: https://binance-docs.github.io/apidocs/spot/en/#trade-streams
+     * 字段说明:
+     * - t: 交易ID
+     * - s: 品种代码
+     * - p: 价格
+     * - q: 数量
+     * - T: 成交时间（撮合引擎时间）
+     * - E: 事件时间（服务器发送时间）
+     * - m: 是否买方主动（true表示卖方主动）
      */
     private TradeTick parseTradeTick(String message) throws Exception {
         JsonNode rootNode = objectMapper.readTree(message);
@@ -260,6 +270,18 @@ public class BNMDGWWebSocketClient implements Actor {
 
     /**
      * 解析币安WebSocket返回的聚合交易数据
+     *
+     * 官方文档: https://binance-docs.github.io/apidocs/spot/en/#aggregate-trade-streams
+     * 字段说明:
+     * - a: 聚合交易ID
+     * - s: 品种代码
+     * - p: 价格
+     * - q: 数量
+     * - f: 首笔交易ID
+     * - l: 末笔交易ID
+     * - T: 成交时间（撮合引擎时间）
+     * - E: 事件时间（服务器发送时间）
+     * - m: 是否买方主动（true表示卖方主动）
      */
     private TradeTick parseAggregateTradeTick(String message) throws Exception {
         JsonNode rootNode = objectMapper.readTree(message);
@@ -276,12 +298,22 @@ public class BNMDGWWebSocketClient implements Actor {
 
     /**
      * 解析币安WebSocket返回的订单簿深度数据
+     *
+     * 官方文档: https://binance-docs.github.io/apidocs/spot/en/#partial-book-depth-streams
+     * 字段说明:
+     * - lastUpdateId: 最后更新ID（用于同步）
+     * - E: 事件时间（服务器发送时间）
+     * - s: 品种代码
+     * - bids: 买盘数据 [[价格, 数量], ...]
+     * - asks: 卖盘数据 [[价格, 数量], ...]
      */
     private OrderBookDepth10 parseOrderBookDepth(String message) throws Exception {
         JsonNode rootNode = objectMapper.readTree(message);
         OrderBookDepth10 depth = new OrderBookDepth10();
         depth.setSymbol(rootNode.path("s").asText());
+        //todo 事件时间
         depth.setLastUpdateId(rootNode.path("lastUpdateId").asLong());
+        //todo 价格 数量 都要记
         depth.setBids(parseOrderBookLevels(rootNode.path("bids")));
         depth.setAsks(parseOrderBookLevels(rootNode.path("asks")));
         return depth;
@@ -289,6 +321,15 @@ public class BNMDGWWebSocketClient implements Actor {
 
     /**
      * 解析币安WebSocket返回的订单簿增量更新数据
+     *
+     * 官方文档: https://binance-docs.github.io/apidocs/spot/en/#diff-depth-stream
+     * 字段说明:
+     * - E: 事件时间（服务器发送时间）
+     * - s: 品种代码
+     * - U: 首笔更新ID
+     * - u: 末笔更新ID（用于同步）
+     * - b: 买盘增量数据 [[价格, 数量], ...]
+     * - a: 卖盘增量数据 [[价格, 数量], ...]
      */
     private OrderBookDeltas parseOrderBookDelta(String message) throws Exception {
         JsonNode rootNode = objectMapper.readTree(message);
@@ -303,6 +344,25 @@ public class BNMDGWWebSocketClient implements Actor {
 
     /**
      * 解析币安WebSocket返回的K线数据
+     *
+     * 官方文档: https://binance-docs.github.io/apidocs/spot/en/#kline-candlestick-streams
+     * 字段说明:
+     * - t: 开盘时间
+     * - T: 收盘时间
+     * - s: 品种代码
+     * - i: K线间隔
+     * - f: 首笔交易ID
+     * - L: 末笔交易ID
+     * - o: 开盘价
+     * - h: 最高价
+     * - l: 最低价
+     * - c: 收盘价
+     * - v: 成交量（现货单位）
+     * - n: 交易次数
+     * - x: 是否闭合
+     * - q: 成交额（报价货币单位）
+     * - V: 主动买入量
+     * - Q: 主动买入额
      */
     private Bar parseBar(String message) throws Exception {
         JsonNode rootNode = objectMapper.readTree(message);
@@ -329,9 +389,20 @@ public class BNMDGWWebSocketClient implements Actor {
 
     /**
      * 解析币安WebSocket返回的报价数据
+     *
+     * 官方文档: https://binance-docs.github.io/apidocs/spot/en/#individual-symbol-mini-ticker-stream
+     * 字段说明:
+     * - e: 事件类型（"24hrTicker"或"miniTicker"）
+     * - E: 事件时间（服务器发送时间）
+     * - s: 品种代码
+     * - c: 最新价
+     * - o: 24小时开盘价
+     * - h: 24小时最高价
+     * - l: 24小时最低价
+     * - v: 24小时成交量（现货单位）
+     * - q: 24小时成交额（报价货币单位）
      */
     private QuoteTick parseQuoteTick(String message) throws Exception {
-        //todo 币安每个字段的详细定义及文档
         JsonNode rootNode = objectMapper.readTree(message);
         QuoteTick quoteTick = new QuoteTick();
         quoteTick.setSymbol(rootNode.path("s").asText());
@@ -347,6 +418,16 @@ public class BNMDGWWebSocketClient implements Actor {
 
     /**
      * 解析币安WebSocket返回的标记价格更新数据
+     *
+     * 官方文档: https://binance-docs.github.io/apidocs/futures/en/#mark-price-stream
+     * 字段说明:
+     * - e: 事件类型（"markPriceUpdate"）
+     * - E: 事件时间（服务器发送时间）
+     * - s: 品种代码
+     * - p: 标记价格
+     * - i: 指数价格
+     * - r: 资金费率
+     * - T: 下次资金费用时间
      */
     private MarkPriceUpdate parseMarkPriceUpdate(String message) throws Exception {
         JsonNode rootNode = objectMapper.readTree(message);
@@ -362,6 +443,13 @@ public class BNMDGWWebSocketClient implements Actor {
 
     /**
      * 解析币安WebSocket返回的指数价格更新数据
+     *
+     * 官方文档: https://binance-docs.github.io/apidocs/futures/en/#index-price-stream
+     * 字段说明:
+     * - e: 事件类型（"indexPriceUpdate"）
+     * - E: 事件时间（服务器发送时间）
+     * - s: 品种代码
+     * - i: 指数价格
      */
     private IndexPriceUpdate parseIndexPriceUpdate(String message) throws Exception {
         JsonNode rootNode = objectMapper.readTree(message);
@@ -374,6 +462,14 @@ public class BNMDGWWebSocketClient implements Actor {
 
     /**
      * 解析币安WebSocket返回的资金费率更新数据
+     *
+     * 官方文档: https://binance-docs.github.io/apidocs/futures/en/#individual-symbol-funding-rate-streams
+     * 字段说明:
+     * - e: 事件类型（"fundingRate"）
+     * - E: 事件时间（服务器发送时间）
+     * - s: 品种代码
+     * - r: 资金费率
+     * - T: 资金费用时间
      */
     private FundingRateUpdate parseFundingRateUpdate(String message) throws Exception {
         JsonNode rootNode = objectMapper.readTree(message);
@@ -387,6 +483,17 @@ public class BNMDGWWebSocketClient implements Actor {
 
     /**
      * 解析币安WebSocket返回的最优买卖盘数据
+     *
+     * 官方文档: https://binance-docs.github.io/apidocs/spot/en/#individual-symbol-book-ticker-streams
+     * 字段说明:
+     * - u: 更新ID
+     * - s: 品种代码
+     * - b: 最佳买价
+     * - B: 最佳买量
+     * - a: 最佳卖价
+     * - A: 最佳卖量
+     * - T: 成交时间
+     * - E: 事件时间（服务器发送时间）
      */
     private QuoteTick parseBookTicker(String message) throws Exception {
         JsonNode rootNode = objectMapper.readTree(message);
