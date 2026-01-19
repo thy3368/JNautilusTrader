@@ -18,7 +18,6 @@ public class ApplicationConfig {
     private List<Actor> tradeClients;
     //应用服务
     private Actor service;
-    private ApplicationConfig applicationConfig;
     private volatile boolean isRunning = false;
 
     /**
@@ -57,7 +56,6 @@ public class ApplicationConfig {
      * 启动市场数据客户端
      */
     private void startMarketDataClients() {
-        List<Actor> mdClients = applicationConfig.getMdClients();
         if (mdClients == null || mdClients.isEmpty()) {
             logger.warn("未配置市场数据客户端");
             return;
@@ -66,10 +64,7 @@ public class ApplicationConfig {
         logger.info("启动市场数据客户端，共 {} 个", mdClients.size());
 
         for (Actor actor : mdClients) {
-
             actor.start_link();
-
-
         }
     }
 
@@ -77,24 +72,19 @@ public class ApplicationConfig {
      * 启动策略
      */
     private void startAppService() {
-        Actor strategy = applicationConfig.getService();
-        if (strategy == null) {
+        if (service == null) {
             logger.warn("未配置策略");
             return;
         }
 
-
-        logger.info("启动策略: {}", strategy.getClass().getSimpleName());
-        strategy.start_link();
-
-
+        logger.info("启动策略: {}", service.getClass().getSimpleName());
+        service.start_link();
     }
 
     /**
      * 启动交易客户端
      */
     private void startTradeClients() {
-        List<Actor> tradeClients = applicationConfig.getTradeClients();
         if (tradeClients == null || tradeClients.isEmpty()) {
             logger.warn("未配置交易客户端");
             return;
@@ -103,12 +93,9 @@ public class ApplicationConfig {
         logger.info("启动交易客户端，共 {} 个", tradeClients.size());
 
         for (Actor actor : tradeClients) {
-
             logger.debug("启动交易客户端: {}", actor.getClass().getSimpleName());
             actor.start_link();
             logger.debug("交易客户端启动成功: {}", actor.getClass().getSimpleName());
-
-
         }
     }
 
@@ -144,7 +131,6 @@ public class ApplicationConfig {
     }
 
     private void stopTradeClients() {
-        List<Actor> tradeClients = applicationConfig.getTradeClients();
         if (tradeClients == null || tradeClients.isEmpty()) {
             return;
         }
@@ -161,22 +147,20 @@ public class ApplicationConfig {
     }
 
     private void stopStrategy() {
-        Actor strategy = applicationConfig.getService();
-        if (strategy == null) {
+        if (service == null) {
             return;
         }
 
         try {
-            logger.debug("停止策略: {}", strategy.getClass().getSimpleName());
-            strategy.stop();
-            logger.debug("策略停止成功: {}", strategy.getClass().getSimpleName());
+            logger.debug("停止策略: {}", service.getClass().getSimpleName());
+            service.stop();
+            logger.debug("策略停止成功: {}", service.getClass().getSimpleName());
         } catch (Exception e) {
-            logger.error("停止策略失败: {}", strategy.getClass().getSimpleName(), e);
+            logger.error("停止策略失败: {}", service.getClass().getSimpleName(), e);
         }
     }
 
     private void stopMarketDataClients() {
-        List<Actor> mdClients = applicationConfig.getMdClients();
         if (mdClients == null || mdClients.isEmpty()) {
             return;
         }
