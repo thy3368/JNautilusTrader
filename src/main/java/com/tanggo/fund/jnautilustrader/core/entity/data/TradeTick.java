@@ -37,10 +37,19 @@ public class TradeTick {
     public double quantity;
 
     /**
-     * 交易时间
+     * 事件时间 - 币安服务器发送消息的时间戳 (毫秒)
+     * 用于计算网络延迟：事件时间 - 成交时间 = 传输延迟
+     */
+    @JsonProperty("E")
+    public long eventTimeMs;
+
+    /**
+     * 成交时间 - 交易在撮合引擎中实际发生的时间戳 (毫秒)
+     * 用于确定交易的准确时序
      */
     @JsonProperty("T")
-    public long timestampMs; // 币安返回的是Unix时间戳（毫秒）
+    public long tradeTimeMs; // 币安返回的是Unix时间戳（毫秒）
+
     /**
      * 方向 (buy/sell)
      */
@@ -48,12 +57,32 @@ public class TradeTick {
     public boolean isBuyerMaker; // true表示卖方主动（sell），false表示买方主动（buy）
 
     // 转换为Instant类型
-    public Instant getTimestamp() {
-        return Instant.ofEpochMilli(timestampMs);
+    public Instant getEventTime() {
+        return Instant.ofEpochMilli(eventTimeMs);
+    }
+
+    public Instant getTradeTime() {
+        return Instant.ofEpochMilli(tradeTimeMs);
+    }
+
+    // 保留原有的timestampMs getter/setter方法以保持兼容性
+    public long getTimestampMs() {
+        return tradeTimeMs;
     }
 
     public void setTimestampMs(long timestampMs) {
-        this.timestampMs = timestampMs;
+        this.tradeTimeMs = timestampMs;
+    }
+
+    public Instant getTimestamp() {
+        return getTradeTime();
+    }
+
+    /**
+     * 获取网络传输延迟 (毫秒)
+     */
+    public long getNetworkDelayMs() {
+        return eventTimeMs - tradeTimeMs;
     }
 
     // 转换为字符串表示的方向

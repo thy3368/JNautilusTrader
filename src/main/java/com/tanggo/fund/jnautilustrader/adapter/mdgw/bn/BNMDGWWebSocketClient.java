@@ -252,7 +252,8 @@ public class BNMDGWWebSocketClient implements Actor {
         tradeTick.symbol = rootNode.path("s").asText();
         tradeTick.price = rootNode.path("p").asDouble();
         tradeTick.quantity = rootNode.path("q").asDouble();
-        tradeTick.timestampMs = rootNode.path("T").asLong();
+        tradeTick.tradeTimeMs = rootNode.path("T").asLong();
+        tradeTick.eventTimeMs = rootNode.path("E").asLong();
         tradeTick.isBuyerMaker = rootNode.path("m").asBoolean();
         return tradeTick;
     }
@@ -267,7 +268,8 @@ public class BNMDGWWebSocketClient implements Actor {
         tradeTick.symbol = rootNode.path("s").asText();
         tradeTick.price = rootNode.path("p").asDouble();
         tradeTick.quantity = rootNode.path("q").asDouble();
-        tradeTick.timestampMs = rootNode.path("T").asLong();
+        tradeTick.tradeTimeMs = rootNode.path("T").asLong();
+        tradeTick.eventTimeMs = rootNode.path("E").asLong();
         tradeTick.isBuyerMaker = rootNode.path("m").asBoolean();
         return tradeTick;
     }
@@ -329,6 +331,7 @@ public class BNMDGWWebSocketClient implements Actor {
      * 解析币安WebSocket返回的报价数据
      */
     private QuoteTick parseQuoteTick(String message) throws Exception {
+        //todo 币安每个字段的详细定义及文档
         JsonNode rootNode = objectMapper.readTree(message);
         QuoteTick quoteTick = new QuoteTick();
         quoteTick.setSymbol(rootNode.path("s").asText());
