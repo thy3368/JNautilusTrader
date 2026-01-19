@@ -1,4 +1,4 @@
-package com.tanggo.fund.jnautilustrader.core.entity.trade;
+package com.tanggo.fund.jnautilustrader.core.entity.event.trade;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;

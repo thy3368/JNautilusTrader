@@ -2,11 +2,8 @@ package com.tanggo.fund.jnautilustrader.stragety.cross;
 
 import com.tanggo.fund.jnautilustrader.adapter.event_repo.handler.HashMapEventHandlerRepo;
 import com.tanggo.fund.jnautilustrader.core.entity.*;
-import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDelta;
-import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDeltas;
-import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDepth10;
-import com.tanggo.fund.jnautilustrader.core.entity.data.TradeTick;
-import com.tanggo.fund.jnautilustrader.core.entity.trade.PlaceOrder;
+import com.tanggo.fund.jnautilustrader.core.entity.event.data.*;
+import com.tanggo.fund.jnautilustrader.core.entity.event.trade.PlaceOrder;
 import lombok.Data;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -679,7 +676,7 @@ public class CrossAppService implements UseCase {
         @Override
         public void handle(Event<MarketData> event) {
             MarketData marketData = event.payload;
-            if (marketData.getMessage() instanceof com.tanggo.fund.jnautilustrader.core.entity.data.QuoteTick quoteTick) {
+            if (marketData.getMessage() instanceof QuoteTick quoteTick) {
                 // 更新最优买卖价
                 if (quoteTick.getBidPrice() > 0) {
                     state.setBinanceBidPrice(quoteTick.getBidPrice());

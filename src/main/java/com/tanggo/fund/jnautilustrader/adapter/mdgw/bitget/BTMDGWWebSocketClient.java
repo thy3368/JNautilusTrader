@@ -6,7 +6,7 @@ import com.tanggo.fund.jnautilustrader.adapter.event_repo.event.BlockingQueueEve
 import com.tanggo.fund.jnautilustrader.core.entity.Actor;
 import com.tanggo.fund.jnautilustrader.core.entity.Event;
 import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
-import com.tanggo.fund.jnautilustrader.core.entity.data.*;
+import com.tanggo.fund.jnautilustrader.core.entity.event.data.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -253,8 +253,8 @@ public class BTMDGWWebSocketClient implements Actor {
     /**
      * 解析订单簿条目
      */
-    private java.util.List<com.tanggo.fund.jnautilustrader.core.entity.data.PriceLevel> parseBookEntries(JsonNode entriesNode) {
-        java.util.List<com.tanggo.fund.jnautilustrader.core.entity.data.PriceLevel> entries = new java.util.ArrayList<>();
+    private java.util.List<PriceLevel> parseBookEntries(JsonNode entriesNode) {
+        java.util.List<PriceLevel> entries = new java.util.ArrayList<>();
 
         if (entriesNode.isArray()) {
             for (JsonNode entryNode : entriesNode) {
@@ -266,7 +266,7 @@ public class BTMDGWWebSocketClient implements Actor {
 
                     // 检查价格和数量是否为空字符串
                     if (!price.isEmpty() && !quantity.isEmpty()) {
-                        entries.add(new com.tanggo.fund.jnautilustrader.core.entity.data.PriceLevel(price, quantity));
+                        entries.add(new PriceLevel(price, quantity));
                     } else {
                         logger.debug("忽略无效的订单簿条目: 价格={}, 数量={}", price, quantity);
                     }

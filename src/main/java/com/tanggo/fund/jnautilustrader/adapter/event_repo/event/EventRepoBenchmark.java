@@ -1,9 +1,8 @@
 package com.tanggo.fund.jnautilustrader.adapter.event_repo.event;
 
-import com.tanggo.fund.jnautilustrader.adapter.event_repo.*;
 import com.tanggo.fund.jnautilustrader.core.entity.Event;
 import com.tanggo.fund.jnautilustrader.core.entity.EventRepo;
-import com.tanggo.fund.jnautilustrader.core.entity.data.TradeTick;
+import com.tanggo.fund.jnautilustrader.core.entity.event.data.TradeTick;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.infra.Blackhole;
 

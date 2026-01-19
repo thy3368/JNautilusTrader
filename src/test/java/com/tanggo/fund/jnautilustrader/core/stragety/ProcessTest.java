@@ -3,7 +3,7 @@ package com.tanggo.fund.jnautilustrader.core.stragety;
 import com.tanggo.fund.jnautilustrader.core.entity.Actor;
 import com.tanggo.fund.jnautilustrader.core.entity.EventHandlerRepo;
 import com.tanggo.fund.jnautilustrader.core.entity.EventRepo;
-import com.tanggo.fund.jnautilustrader.core.entity.data.TradeTick;
+import com.tanggo.fund.jnautilustrader.core.entity.event.data.TradeTick;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;

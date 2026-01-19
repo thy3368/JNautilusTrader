@@ -1,6 +1,6 @@
 package com.tanggo.fund.jnautilustrader.core.entity;
 
-import com.tanggo.fund.jnautilustrader.core.entity.data.*;
+import com.tanggo.fund.jnautilustrader.core.entity.event.data.*;
 
 /**
  * 市场数据枚举

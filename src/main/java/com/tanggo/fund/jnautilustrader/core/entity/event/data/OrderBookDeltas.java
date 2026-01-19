@@ -1,4 +1,4 @@
-package com.tanggo.fund.jnautilustrader.core.entity.data;
+package com.tanggo.fund.jnautilustrader.core.entity.event.data;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -8,12 +8,12 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * 订单簿深度10档实体类
- * 包含订单簿的10档深度数据
+ * 订单簿增量更新列表实体类
+ * 包含多个订单簿增量更新数据
  */
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class OrderBookDepth10 {
+public class OrderBookDeltas {
     /**
      * 品种代码
      */
@@ -21,7 +21,7 @@ public class OrderBookDepth10 {
     private String symbol;
 
     /**
-     * 事件时间
+     * 更新时间戳
      */
     @JsonProperty("E")
     private long eventTime;
@@ -29,26 +29,35 @@ public class OrderBookDepth10 {
     /**
      * 最后更新ID
      */
-    @JsonProperty("lastUpdateId")
+    @JsonProperty("u")
     private long lastUpdateId;
 
     /**
-     * 买盘深度（价格从高到低排序）
+     * 买盘增量更新（价格和数量）
      */
-    @JsonProperty("bids")
+    @JsonProperty("b")
     private List<PriceLevel> bids;
 
     /**
-     * 卖盘深度（价格从低到高排序）
+     * 卖盘增量更新（价格和数量）
      */
-    @JsonProperty("asks")
+    @JsonProperty("a")
     private List<PriceLevel> asks;
+
+    // 转换为Instant类型
+    public Instant getEventTime() {
+        return Instant.ofEpochMilli(eventTime);
+    }
+
+    public void setEventTime(long eventTime) {
+        this.eventTime = eventTime;
+    }
 
     @Override
     public String toString() {
-        return "OrderBookDepth10{" +
+        return "OrderBookDeltas{" +
                 "symbol='" + symbol + '\'' +
-                ", eventTime=" + eventTime +
+                ", eventTime=" + getEventTime() +
                 ", lastUpdateId=" + lastUpdateId +
                 ", bids=" + bids +
                 ", asks=" + asks +

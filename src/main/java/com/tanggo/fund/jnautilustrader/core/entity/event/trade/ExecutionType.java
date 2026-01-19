@@ -1,4 +1,4 @@
-package com.tanggo.fund.jnautilustrader.core.entity.data;
+package com.tanggo.fund.jnautilustrader.core.entity.event.trade;
 
 /**
  * 执行类型枚举

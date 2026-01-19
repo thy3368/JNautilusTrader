@@ -11,11 +11,8 @@ import com.tanggo.fund.jnautilustrader.core.entity.Event;
 import com.tanggo.fund.jnautilustrader.core.entity.EventRepo;
 import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
 import com.tanggo.fund.jnautilustrader.core.entity.TradeCmd;
-import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDelta;
-import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDeltas;
-import com.tanggo.fund.jnautilustrader.core.entity.data.OrderBookDepth10;
-import com.tanggo.fund.jnautilustrader.core.entity.data.TradeTick;
-import com.tanggo.fund.jnautilustrader.core.entity.trade.PlaceOrder;
+import com.tanggo.fund.jnautilustrader.core.entity.event.data.*;
+import com.tanggo.fund.jnautilustrader.core.entity.event.trade.PlaceOrder;
 import com.tanggo.fund.jnautilustrader.stragety.cross.CrossArbitrageParams;
 import com.tanggo.fund.jnautilustrader.stragety.cross.CrossArbitrageState;
 import lombok.extern.slf4j.Slf4j;
@@ -193,7 +190,7 @@ public class CrossActor {
      * 处理币安QuoteTick事件
      */
     private void handleBinanceQuoteTick(MarketData marketData, CrossArbitrageState state) {
-        if (marketData.getMessage() instanceof com.tanggo.fund.jnautilustrader.core.entity.data.QuoteTick quoteTick) {
+        if (marketData.getMessage() instanceof QuoteTick quoteTick) {
             if (quoteTick.getBidPrice() > 0) {
                 state.setBinanceBidPrice(quoteTick.getBidPrice());
             }
