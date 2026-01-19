@@ -311,9 +311,9 @@ public class BNMDGWWebSocketClient implements Actor {
         JsonNode rootNode = objectMapper.readTree(message);
         OrderBookDepth10 depth = new OrderBookDepth10();
         depth.setSymbol(rootNode.path("s").asText());
-        //todo 事件时间
+        depth.setEventTime(rootNode.path("E").asLong());
         depth.setLastUpdateId(rootNode.path("lastUpdateId").asLong());
-        //todo 价格 数量 都要记
+        // 解析买卖盘档位（价格和数量已在parseOrderBookLevels中记录为字符串列表）
         depth.setBids(parseOrderBookLevels(rootNode.path("bids")));
         depth.setAsks(parseOrderBookLevels(rootNode.path("asks")));
         return depth;
@@ -509,18 +509,18 @@ public class BNMDGWWebSocketClient implements Actor {
 
     /**
      * 解析订单簿档位数据
+     * 将 [[价格, 数量], ...] 格式转换为 PriceLevel 对象列表
      */
-    private List<List<String>> parseOrderBookLevels(JsonNode levelsNode) {
+    private List<PriceLevel> parseOrderBookLevels(JsonNode levelsNode) {
         if (levelsNode.isMissingNode() || !levelsNode.isArray()) {
             return List.of();
         }
-        List<List<String>> levels = new ArrayList<>();
+        List<PriceLevel> levels = new ArrayList<>();
         for (JsonNode levelNode : levelsNode) {
             if (levelNode.isArray() && levelNode.size() >= 2) {
-                List<String> level = new ArrayList<>();
-                level.add(levelNode.get(0).asText());
-                level.add(levelNode.get(1).asText());
-                levels.add(level);
+                String price = levelNode.get(0).asText();
+                String quantity = levelNode.get(1).asText();
+                levels.add(new PriceLevel(price, quantity));
             }
         }
         return levels;

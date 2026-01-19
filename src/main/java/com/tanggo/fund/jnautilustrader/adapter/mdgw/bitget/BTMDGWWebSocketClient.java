@@ -253,12 +253,11 @@ public class BTMDGWWebSocketClient implements Actor {
     /**
      * 解析订单簿条目
      */
-    private java.util.List<java.util.List<String>> parseBookEntries(JsonNode entriesNode) {
-        java.util.List<java.util.List<String>> entries = new java.util.ArrayList<>();
+    private java.util.List<com.tanggo.fund.jnautilustrader.core.entity.data.PriceLevel> parseBookEntries(JsonNode entriesNode) {
+        java.util.List<com.tanggo.fund.jnautilustrader.core.entity.data.PriceLevel> entries = new java.util.ArrayList<>();
 
         if (entriesNode.isArray()) {
             for (JsonNode entryNode : entriesNode) {
-                java.util.List<String> entry = new java.util.ArrayList<>();
 
                 // Bitget books频道返回的格式是 ["价格", "数量"] 数组
                 if (entryNode.isArray() && entryNode.size() >= 2) {
@@ -267,9 +266,7 @@ public class BTMDGWWebSocketClient implements Actor {
 
                     // 检查价格和数量是否为空字符串
                     if (!price.isEmpty() && !quantity.isEmpty()) {
-                        entry.add(price);
-                        entry.add(quantity);
-                        entries.add(entry);
+                        entries.add(new com.tanggo.fund.jnautilustrader.core.entity.data.PriceLevel(price, quantity));
                     } else {
                         logger.debug("忽略无效的订单簿条目: 价格={}, 数量={}", price, quantity);
                     }

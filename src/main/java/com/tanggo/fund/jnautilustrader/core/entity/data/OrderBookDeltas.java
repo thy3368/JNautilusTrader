@@ -33,16 +33,16 @@ public class OrderBookDeltas {
     private long lastUpdateId;
 
     /**
-     * 买盘增量更新
+     * 买盘增量更新（价格和数量）
      */
     @JsonProperty("b")
-    private List<List<String>> bids;
+    private List<PriceLevel> bids;
 
     /**
-     * 卖盘增量更新
+     * 卖盘增量更新（价格和数量）
      */
     @JsonProperty("a")
-    private List<List<String>> asks;
+    private List<PriceLevel> asks;
 
     // 转换为Instant类型
     public Instant getEventTime() {

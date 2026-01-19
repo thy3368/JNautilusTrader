@@ -250,8 +250,9 @@ public class CrossActor {
     private void extractBestPrices(OrderBookDepth10 orderBook, PriceSetter bidSetter, PriceSetter askSetter) {
         if (orderBook.getBids() != null && !orderBook.getBids().isEmpty()) {
             try {
-                if (orderBook.getBids().get(0) != null && !orderBook.getBids().get(0).isEmpty()) {
-                    String bidPriceStr = orderBook.getBids().get(0).get(0);
+                // 使用PriceLevel对象获取价格
+                if (orderBook.getBids().get(0) != null) {
+                    String bidPriceStr = orderBook.getBids().get(0).getPrice();
                     if (bidPriceStr != null && !bidPriceStr.isEmpty()) {
                         double bidPrice = Double.parseDouble(bidPriceStr);
                         bidSetter.setPrice(bidPrice);
@@ -264,8 +265,9 @@ public class CrossActor {
 
         if (orderBook.getAsks() != null && !orderBook.getAsks().isEmpty()) {
             try {
-                if (orderBook.getAsks().get(0) != null && !orderBook.getAsks().get(0).isEmpty()) {
-                    String askPriceStr = orderBook.getAsks().get(0).get(0);
+                // 使用PriceLevel对象获取价格
+                if (orderBook.getAsks().get(0) != null) {
+                    String askPriceStr = orderBook.getAsks().get(0).getPrice();
                     if (askPriceStr != null && !askPriceStr.isEmpty()) {
                         double askPrice = Double.parseDouble(askPriceStr);
                         askSetter.setPrice(askPrice);
@@ -283,8 +285,9 @@ public class CrossActor {
     private void extractBestPricesFromDeltas(OrderBookDeltas deltas, PriceSetter bidSetter, PriceSetter askSetter) {
         if (deltas.getBids() != null && !deltas.getBids().isEmpty()) {
             try {
-                if (deltas.getBids().get(0) != null && !deltas.getBids().get(0).isEmpty()) {
-                    String bidPriceStr = deltas.getBids().get(0).get(0);
+                // 使用PriceLevel对象获取价格
+                if (deltas.getBids().get(0) != null) {
+                    String bidPriceStr = deltas.getBids().get(0).getPrice();
                     if (bidPriceStr != null && !bidPriceStr.isEmpty()) {
                         double bidPrice = Double.parseDouble(bidPriceStr);
                         bidSetter.setPrice(bidPrice);
@@ -297,8 +300,9 @@ public class CrossActor {
 
         if (deltas.getAsks() != null && !deltas.getAsks().isEmpty()) {
             try {
-                if (deltas.getAsks().get(0) != null && !deltas.getAsks().get(0).isEmpty()) {
-                    String askPriceStr = deltas.getAsks().get(0).get(0);
+                // 使用PriceLevel对象获取价格
+                if (deltas.getAsks().get(0) != null) {
+                    String askPriceStr = deltas.getAsks().get(0).getPrice();
                     if (askPriceStr != null && !askPriceStr.isEmpty()) {
                         double askPrice = Double.parseDouble(askPriceStr);
                         askSetter.setPrice(askPrice);

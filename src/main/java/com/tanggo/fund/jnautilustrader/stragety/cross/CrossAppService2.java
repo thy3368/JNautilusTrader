@@ -397,9 +397,9 @@ public class CrossAppService2 implements UseCase {
                 // 提取最佳买卖价
                 if (orderBook.getBids() != null && !orderBook.getBids().isEmpty()) {
                     try {
-                        // 检查是否有足够的深度数据且不为空字符串
-                        if (orderBook.getBids().get(0) != null && orderBook.getBids().get(0).size() > 0) {
-                            String bidPriceStr = orderBook.getBids().get(0).get(0);
+                        // 使用PriceLevel对象获取价格
+                        if (orderBook.getBids().get(0) != null) {
+                            String bidPriceStr = orderBook.getBids().get(0).getPrice();
                             if (bidPriceStr != null && !bidPriceStr.isEmpty()) {
                                 double bidPrice = Double.parseDouble(bidPriceStr);
                                 state.setBinanceBidPrice(bidPrice);
@@ -408,7 +408,7 @@ public class CrossAppService2 implements UseCase {
                             }
                         }
                     } catch (NumberFormatException e) {
-                        logger.warn("Invalid Binance bid price format: {}", orderBook.getBids().get(0).get(0), e);
+                        logger.warn("Invalid Binance bid price format: {}", orderBook.getBids().get(0).getPrice(), e);
                     } catch (Exception e) {
                         logger.warn("Error parsing Binance bid price", e);
                     }
@@ -416,9 +416,9 @@ public class CrossAppService2 implements UseCase {
 
                 if (orderBook.getAsks() != null && !orderBook.getAsks().isEmpty()) {
                     try {
-                        // 检查是否有足够的深度数据且不为空字符串
-                        if (orderBook.getAsks().get(0) != null && orderBook.getAsks().get(0).size() > 0) {
-                            String askPriceStr = orderBook.getAsks().get(0).get(0);
+                        // 使用PriceLevel对象获取价格
+                        if (orderBook.getAsks().get(0) != null) {
+                            String askPriceStr = orderBook.getAsks().get(0).getPrice();
                             if (askPriceStr != null && !askPriceStr.isEmpty()) {
                                 double askPrice = Double.parseDouble(askPriceStr);
                                 state.setBinanceAskPrice(askPrice);
@@ -427,7 +427,7 @@ public class CrossAppService2 implements UseCase {
                             }
                         }
                     } catch (NumberFormatException e) {
-                        logger.warn("Invalid Binance ask price format: {}", orderBook.getAsks().get(0).get(0), e);
+                        logger.warn("Invalid Binance ask price format: {}", orderBook.getAsks().get(0).getPrice(), e);
                     } catch (Exception e) {
                         logger.warn("Error parsing Binance ask price", e);
                     }
@@ -470,9 +470,9 @@ public class CrossAppService2 implements UseCase {
                 // 提取最佳买卖价
                 if (orderBook.getBids() != null && !orderBook.getBids().isEmpty()) {
                     try {
-                        // 检查是否有足够的深度数据且不为空字符串
-                        if (orderBook.getBids().get(0) != null && orderBook.getBids().get(0).size() > 0) {
-                            String bidPriceStr = orderBook.getBids().get(0).get(0);
+                        // 使用PriceLevel对象获取价格
+                        if (orderBook.getBids().get(0) != null) {
+                            String bidPriceStr = orderBook.getBids().get(0).getPrice();
                             if (bidPriceStr != null && !bidPriceStr.isEmpty()) {
                                 double bidPrice = Double.parseDouble(bidPriceStr);
                                 state.setBitgetBidPrice(bidPrice);
@@ -481,7 +481,7 @@ public class CrossAppService2 implements UseCase {
                             }
                         }
                     } catch (NumberFormatException e) {
-                        logger.warn("Invalid Bitget bid price format: {}", orderBook.getBids().get(0).get(0), e);
+                        logger.warn("Invalid Bitget bid price format: {}", orderBook.getBids().get(0).getPrice(), e);
                     } catch (Exception e) {
                         logger.warn("Error parsing Bitget bid price", e);
                     }
@@ -489,9 +489,9 @@ public class CrossAppService2 implements UseCase {
 
                 if (orderBook.getAsks() != null && !orderBook.getAsks().isEmpty()) {
                     try {
-                        // 检查是否有足够的深度数据且不为空字符串
-                        if (orderBook.getAsks().get(0) != null && orderBook.getAsks().get(0).size() > 0) {
-                            String askPriceStr = orderBook.getAsks().get(0).get(0);
+                        // 使用PriceLevel对象获取价格
+                        if (orderBook.getAsks().get(0) != null) {
+                            String askPriceStr = orderBook.getAsks().get(0).getPrice();
                             if (askPriceStr != null && !askPriceStr.isEmpty()) {
                                 double askPrice = Double.parseDouble(askPriceStr);
                                 state.setBitgetAskPrice(askPrice);
@@ -500,7 +500,7 @@ public class CrossAppService2 implements UseCase {
                             }
                         }
                     } catch (NumberFormatException e) {
-                        logger.warn("Invalid Bitget ask price format: {}", orderBook.getAsks().get(0).get(0), e);
+                        logger.warn("Invalid Bitget ask price format: {}", orderBook.getAsks().get(0).getPrice(), e);
                     } catch (Exception e) {
                         logger.warn("Error parsing Bitget ask price", e);
                     }
