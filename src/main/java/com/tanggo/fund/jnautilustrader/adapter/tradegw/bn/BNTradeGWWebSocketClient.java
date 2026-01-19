@@ -9,6 +9,8 @@ import com.tanggo.fund.jnautilustrader.core.entity.Event;
 import com.tanggo.fund.jnautilustrader.core.entity.MarketData;
 import com.tanggo.fund.jnautilustrader.core.entity.TradeCmd;
 import com.tanggo.fund.jnautilustrader.core.entity.trade.PlaceOrder;
+import com.tanggo.fund.jnautilustrader.core.entity.data.OrderUpdate;
+import com.tanggo.fund.jnautilustrader.core.entity.data.TradeExecution;
 import com.tanggo.fund.jnautilustrader.core.entity.data.TradeTick;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -192,6 +194,11 @@ public class BNTradeGWWebSocketClient implements Actor {
             String orderJson = convertToBinanceOrderFormat(placeOrder);
             logger.debug("发送交易命令: {}", orderJson);
 
+            //todo   币安正确的下单方式：
+            //  - ✅ 现货交易：POST /api/v3/order (REST API)
+            //  - ✅ 合约交易：POST /fapi/v1/order (REST API)
+            //  - ❌ WebSocket：仅用于接收推送，不支持下单
+
             webSocket.sendText(orderJson, true);
         } catch (Exception e) {
             logger.error("发送交易命令失败: {}", e.getMessage(), e);
@@ -203,6 +210,7 @@ public class BNTradeGWWebSocketClient implements Actor {
      * 转换PlaceOrder到币安API格式
      */
     private String convertToBinanceOrderFormat(PlaceOrder placeOrder) throws JsonProcessingException {
+        //todo 下发的订单及成交回报 怎么获取？
         // 手动构建币安API格式的JSON，不依赖JsonProperty标签
         com.fasterxml.jackson.databind.node.ObjectNode orderNode = objectMapper.createObjectNode();
         orderNode.put("symbol", placeOrder.getSymbol());
@@ -283,6 +291,7 @@ public class BNTradeGWWebSocketClient implements Actor {
             JsonNode rootNode = objectMapper.readTree(responseJson);
             String eventType = rootNode.path("e").asText();
 
+            //todo 确认这几个转换
             switch (eventType) {
                 case "executionReport":
                     handleExecutionReport(rootNode);
@@ -302,35 +311,138 @@ public class BNTradeGWWebSocketClient implements Actor {
     }
 
     /**
-     * 处理订单执行报告
+     * 处理订单执行报告（改进版 - 分离订单回报和成交回报）
      */
     private void handleExecutionReport(JsonNode report) {
         try {
-            // 解析执行报告并转换为TradeTick
-            TradeTick tradeTick = parseExecutionReportToTradeTick(report);
-            if (tradeTick != null) {
-                Event<TradeTick> event = new Event<>();
-                event.setType("executionReport");
-                event.setPayload(tradeTick);
-                Event<MarketData> marketEvent = new Event<>();
-                marketEvent.setType("executionReport");
-                marketEvent.setPayload(MarketData.createWithData(tradeTick));
-                marketDataBlockingQueueEventRepo.send(marketEvent);
+            // 1. 解析为OrderUpdate对象
+            OrderUpdate orderUpdate = parseExecutionReportToOrderUpdate(report);
+            if (orderUpdate == null) {
+                logger.warn("解析OrderUpdate失败，原始数据: {}", report);
+                return;
             }
+
+            logger.info("收到订单更新: {}", orderUpdate);
+
+            // 2. 发布订单状态更新事件（所有executionReport都会发布）
+            publishOrderUpdateEvent(orderUpdate);
+
+            // 3. 如果有实际成交，额外发布成交回报事件
+            if (orderUpdate.hasNewExecution()) {
+                TradeExecution tradeExecution = TradeExecution.fromOrderUpdate(orderUpdate);
+                if (tradeExecution != null) {
+                    logger.info("收到成交回报: {}", tradeExecution);
+                    publishTradeExecutionEvent(tradeExecution);
+                }
+            }
+
         } catch (Exception e) {
-            logger.error("解析执行报告失败: {}", e.getMessage(), e);
+            logger.error("处理执行报告失败: {}, 原始数据: {}", e.getMessage(), report, e);
         }
     }
 
     /**
-     * 解析执行报告到TradeTick
+     * 解析执行报告到OrderUpdate对象（手动解析，不依赖Jackson注解）
      */
+    private OrderUpdate parseExecutionReportToOrderUpdate(JsonNode report) {
+        try {
+            OrderUpdate orderUpdate = new OrderUpdate();
+
+            // 基本信息
+            orderUpdate.setEventType(report.path("e").asText());
+            orderUpdate.setEventTime(report.path("E").asLong());
+            orderUpdate.setSymbol(report.path("s").asText());
+            orderUpdate.setClientOrderId(report.path("c").asText());
+
+            // 订单信息
+            orderUpdate.setSide(report.path("S").asText());
+            orderUpdate.setOrderType(report.path("o").asText());
+            orderUpdate.setTimeInForce(report.path("f").asText());
+            orderUpdate.setOriginalQuantity(report.path("q").asDouble());
+            orderUpdate.setOriginalPrice(report.path("p").asDouble());
+            orderUpdate.setStopPrice(report.path("P").asDouble());
+
+            // 执行信息
+            orderUpdate.setExecutionType(report.path("x").asText());
+            orderUpdate.setOrderStatus(report.path("X").asText());
+            orderUpdate.setRejectReason(report.path("r").asText());
+            orderUpdate.setOrderId(report.path("i").asLong());
+
+            // 成交信息
+            orderUpdate.setLastExecutedQuantity(report.path("l").asDouble());
+            orderUpdate.setCumulativeFilledQuantity(report.path("z").asDouble());
+            orderUpdate.setLastExecutedPrice(report.path("L").asDouble());
+            orderUpdate.setCommissionAmount(report.path("n").asDouble());
+            orderUpdate.setCommissionAsset(report.path("N").asText());
+
+            // 时间和交易ID
+            orderUpdate.setTransactionTime(report.path("T").asLong());
+            orderUpdate.setTradeId(report.path("t").asLong());
+
+            // 标志位
+            orderUpdate.setMaker(report.path("m").asBoolean());
+            orderUpdate.setOrderWorking(report.path("w").asBoolean());
+
+            // 金额信息
+            orderUpdate.setCumulativeQuoteQuantity(report.path("Y").asDouble());
+            orderUpdate.setLastQuoteQuantity(report.path("Z").asDouble());
+
+            // OCO订单信息
+            orderUpdate.setOrderListId(report.path("g").asLong(-1L));
+            orderUpdate.setOriginalClientOrderId(report.path("C").asText());
+
+            return orderUpdate;
+        } catch (Exception e) {
+            logger.error("手动解析OrderUpdate失败: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /**
+     * 发布订单状态更新事件
+     */
+    private void publishOrderUpdateEvent(OrderUpdate orderUpdate) {
+        try {
+            Event<MarketData> event = new Event<>();
+            event.setType("orderUpdate");
+            event.setPayload(MarketData.createWithData(orderUpdate));
+            marketDataBlockingQueueEventRepo.send(event);
+
+            logger.debug("已发布订单更新事件: orderId={}, status={}, executionType={}",
+                orderUpdate.getOrderId(), orderUpdate.getOrderStatus(), orderUpdate.getExecutionType());
+        } catch (Exception e) {
+            logger.error("发布订单更新事件失败: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 发布成交回报事件
+     */
+    private void publishTradeExecutionEvent(TradeExecution tradeExecution) {
+        try {
+            Event<MarketData> event = new Event<>();
+            event.setType("tradeExecution");
+            event.setPayload(MarketData.createWithData(tradeExecution));
+            marketDataBlockingQueueEventRepo.send(event);
+
+            logger.debug("已发布成交回报事件: tradeId={}, price={}, quantity={}",
+                tradeExecution.getTradeId(), tradeExecution.getPrice(), tradeExecution.getQuantity());
+        } catch (Exception e) {
+            logger.error("发布成交回报事件失败: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 解析执行报告到TradeTick（已废弃，保留用于向后兼容）
+     * @deprecated 使用 {@link #parseExecutionReportToOrderUpdate(JsonNode)} 替代
+     */
+    @Deprecated
     private TradeTick parseExecutionReportToTradeTick(JsonNode report) {
         TradeTick tick = new TradeTick();
         tick.setTradeId(report.path("t").asText());
         tick.setSymbol(report.path("s").asText());
-        tick.setPrice(report.path("p").asDouble());
-        tick.setQuantity(report.path("q").asDouble());
+        tick.setPrice(report.path("L").asDouble()); // 使用最后成交价格
+        tick.setQuantity(report.path("l").asDouble()); // 使用最后成交数量
         tick.setTimestampMs(report.path("T").asLong());
         tick.setBuyerMaker(report.path("m").asBoolean());
         return tick;

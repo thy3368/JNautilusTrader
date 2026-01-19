@@ -19,6 +19,7 @@ public enum MarketData {
     INSTRUMENT_STATUS(null),
     INSTRUMENT_CLOSE(null);
 
+    //todo 增加 OrderUpdate 和TradeExecution
     private Object message;
 
     MarketData(Object message) {
